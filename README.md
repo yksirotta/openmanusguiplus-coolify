@@ -93,16 +93,16 @@ The installer includes smart disk space management and several options:
 
 ```bash
 # Minimal installation (no PyTorch or TensorFlow)
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash --minimal
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --minimal
 
 # Skip PyTorch to save ~800MB of space
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash --skip-torch
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --skip-torch
 
 # Keep pip cache (default is to clean cache)
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash --no-clean-cache
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --no-clean-cache
 
 # Use custom virtual environment path
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash --env=/path/to/env
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --env=/path/to/env
 ```
 
 The installer automatically:
