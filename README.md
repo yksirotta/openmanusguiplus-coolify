@@ -39,6 +39,24 @@ We're also excited to introduce [OpenManus-RL](https://github.com/OpenManus/Open
 
 ## Installation
 
+### Method 1: One-Line Installation (Recommended)
+
+For the quickest installation experience, you can use our one-line wget command:
+
+```bash
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash
+```
+
+This will automatically:
+- Clone the repository
+- Set up a Python virtual environment
+- Install all dependencies
+- Configure basic settings
+
+The script will ask for an installation directory (defaults to ~/openmanusguiplus) and guide you through the process.
+
+### Method 2: Manual Installation
+
 1. Install the required dependencies:
 
 ```bash
