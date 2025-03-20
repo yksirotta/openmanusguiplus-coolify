@@ -86,19 +86,36 @@ uv pip install -r requirements.txt
 For the quickest installation experience, you can use our one-line wget command:
 
 ```bash
-wget -O- https://raw.githubusercontent.com/mannaandpoem/OpenManus/main/install.sh | bash
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash
 ```
 
-This will automatically:
-- Clone the repository
-- Set up a Python virtual environment
-- Install all dependencies
-- Configure basic settings
+The installer includes smart disk space management and several options:
+
+```bash
+# Minimal installation (no PyTorch or TensorFlow)
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash --minimal
+
+# Skip PyTorch to save ~800MB of space
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash --skip-torch
+
+# Keep pip cache (default is to clean cache)
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash --no-clean-cache
+
+# Use custom virtual environment path
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash --env=/path/to/env
+```
+
+The installer automatically:
+- Detects low disk space and offers appropriate options
+- Cleans pip cache to save space during installation
+- Installs large packages separately to better manage memory
+- Sets up a Python virtual environment
+- Configures basic settings
 
 After installation completes, navigate to the OpenManus directory:
 
 ```bash
-cd OpenManus
+cd openmanusguiplus
 ```
 
 ### Browser Automation Tool (Optional)
