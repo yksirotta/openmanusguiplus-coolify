@@ -1,5 +1,9 @@
+# OpenManus GUI Plus
+
+A modern, feature-rich web dashboard for the OpenManus AI agent framework.
+
 <p align="center">
-  <img src="assets/logo.jpg" width="200"/>
+  <img src="../assets/logo.jpg" width="200"/>
 </p>
 
 English | [中文](README_zh.md) | [한국어](README_ko.md) | [日本語](README_ja.md)
@@ -25,185 +29,72 @@ We're also excited to introduce [OpenManus-RL](https://github.com/OpenManus/Open
 
 <video src="https://private-user-images.githubusercontent.com/61239030/420168772-6dcfd0d2-9142-45d9-b74e-d10aa75073c6.mp4?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDEzMTgwNTksIm5iZiI6MTc0MTMxNzc1OSwicGF0aCI6Ii82MTIzOTAzMC80MjAxNjg3NzItNmRjZmQwZDItOTE0Mi00NWQ5LWI3NGUtZDEwYWE3NTA3M2M2Lm1wND9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMDclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzA3VDAzMjIzOVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTdiZjFkNjlmYWNjMmEzOTliM2Y3M2VlYjgyNDRlZDJmOWE3NWZhZjE1MzhiZWY4YmQ3NjdkNTYwYTU5ZDA2MzYmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.UuHQCgWYkh0OQq9qsUWqGsUbhG3i9jcZDAMeHjLt5T4" data-canonical-src="https://private-user-images.githubusercontent.com/61239030/420168772-6dcfd0d2-9142-45d9-b74e-d10aa75073c6.mp4?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDEzMTgwNTksIm5iZiI6MTc0MTMxNzc1OSwicGF0aCI6Ii82MTIzOTAzMC80MjAxNjg3NzItNmRjZmQwZDItOTE0Mi00NWQ5LWI3NGUtZDEwYWE3NTA3M2M2Lm1wND9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMDclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzA3VDAzMjIzOVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTdiZjFkNjlmYWNjMmEzOTliM2Y3M2VlYjgyNDRlZDJmOWE3NWZhZjE1MzhiZWY4YmQ3NjdkNTYwYTU5ZDA2MzYmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.UuHQCgWYkh0OQq9qsUWqGsUbhG3i9jcZDAMeHjLt5T4" controls="controls" muted="muted" class="d-block rounded-bottom-2 border-top width-fit" style="max-height:640px; min-height: 200px"></video>
 
+## Features
+
+- **Intuitive Web Interface**: Modern, responsive UI to interact with OpenManus agents
+- **Full Configuration Management**: Configure all aspects of OpenManus directly through the web UI
+- **Simplified LLM Integration**: Easy management of LLM models and API keys
+- **System Resource Monitoring**: Real-time CPU, RAM, and disk usage visualization
+- **Tool Integration**: Access to all OpenManus tools and capabilities through a user-friendly interface
+
 ## Installation
 
-We provide two installation methods. Method 2 (using uv) is recommended for faster dependency management.
-
-### Method 1: Using conda
-
-1. Create a new conda environment:
-
-```bash
-conda create -n open_manus python=3.12
-conda activate open_manus
-```
-
-2. Clone the repository:
-
-```bash
-git clone https://github.com/mannaandpoem/OpenManus.git
-cd OpenManus
-```
-
-3. Install dependencies:
+1. Install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Method 2: Using uv (Recommended)
+2. Configure your LLM provider(s) in the web UI or update the config file:
 
-1. Install uv (A fast Python package installer and resolver):
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+config/config.toml
 ```
 
-2. Clone the repository:
-
-```bash
-git clone https://github.com/mannaandpoem/OpenManus.git
-cd OpenManus
-```
-
-3. Create a new virtual environment and activate it:
-
-```bash
-uv venv --python 3.12
-source .venv/bin/activate  # On Unix/macOS
-# Or on Windows:
-# .venv\Scripts\activate
-```
-
-4. Install dependencies:
-
-```bash
-uv pip install -r requirements.txt
-```
-
-### Method 3: One-Line Installation (Easy)
-
-For the quickest installation experience, you can use our smart staged installer:
-
-```bash
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash
-```
-
-Our smart installer automatically:
-- Checks disk space at each stage and adapts accordingly
-- Uses sparse checkouts to minimize downloaded content
-- Installs components in stages to prevent space issues
-- Cleans up temporary files and caches throughout installation
-- Provides detailed progress and error reporting
-
-**Installation Options:**
-
-```bash
-# Minimal installation (no ML libs or PyTorch, saves ~1GB)
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --minimal
-
-# Skip just PyTorch (saves ~800MB)
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --skip-torch
-
-# Basic installation only (minimal core functionality)
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --basic-only
-
-# Install to custom directory
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --install-dir=my_openmanus
-
-# Use custom virtual environment path
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --env=/path/to/env
-```
-
-After installation, navigate to the installation directory:
-
-```bash
-cd openmanusguiplus  # or your custom directory if specified
-```
-
-### Browser Automation Tool (Optional)
-```bash
-playwright install
-```
-
-## Configuration
-
-OpenManus requires configuration for the LLM APIs it uses. Follow these steps to set up your configuration:
-
-1. Create a `config.toml` file in the `config` directory (you can copy from the example):
-
-```bash
-cp config/config.example.toml config/config.toml
-```
-
-2. Edit `config/config.toml` to add your API keys and customize settings:
-
-```toml
-# Global LLM configuration
-[llm]
-model = "gpt-4o"
-base_url = "https://api.openai.com/v1"
-api_key = "sk-..."  # Replace with your actual API key
-max_tokens = 4096
-temperature = 0.0
-
-# Optional configuration for specific LLM models
-[llm.vision]
-model = "gpt-4o"
-base_url = "https://api.openai.com/v1"
-api_key = "sk-..."  # Replace with your actual API key
-```
-
-## Quick Start
-
-One line for run OpenManus:
-
-```bash
-python main.py
-```
-
-Then input your idea via terminal!
-
-For MCP tool version, you can run:
-```bash
-python run_mcp.py
-```
-
-For unstable multi-agent version, you also can run:
-
-```bash
-python run_flow.py
-```
-
-### Web Dashboard UI (New!)
-
-OpenManus now includes a modern web-based dashboard interface that provides a user-friendly way to interact with the AI agent:
+3. Run the web dashboard:
 
 ```bash
 python run_web_app.py
 ```
 
-Then open your browser and navigate to http://localhost:5000 to access the dashboard.
+4. Access the dashboard at http://localhost:5000
 
-The web dashboard includes features like:
-- Modern chat interface with AI responses
-- Dark/light theme support
-- Tool integration panel
-- AI thinking visualization
-- File upload and analysis
-- Settings customization
-- Code editing and execution
-- Web search integration
+## Dashboard Components
 
-![OpenManus Web Dashboard](assets/web-dashboard.png)
+### LLM Configuration
 
-## How to contribute
+The dashboard provides a user-friendly interface for managing LLM models:
 
-We welcome any friendly suggestions and helpful contributions! Just create issues or submit pull requests.
+- Add multiple LLM models (OpenAI, Anthropic, Azure, etc.)
+- Configure API endpoints and keys securely
+- Set temperature, token limits, and other parameters
+- Switch between models easily
 
-Or contact @mannaandpoem via 📧email: mannaandpoem@gmail.com
+### System Monitoring
 
-**Note**: Before submitting a pull request, please use the pre-commit tool to check your changes. Run `pre-commit run --all-files` to execute the checks.
+Monitor system resources in real-time:
+
+- CPU usage (overall and per-core)
+- Memory usage
+- Disk space utilization
+- Detailed performance charts and metrics
+
+### Tool Management
+
+Access and configure all OpenManus tools:
+
+- Web browsing and search
+- Code execution
+- File operations
+- Custom integrations
+
+## Contributing
+
+Contributions to improve the dashboard are welcome! Please see our main contribution guidelines in the parent repository.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Community Group
 Join our networking group on Feishu and share your experience with other developers!

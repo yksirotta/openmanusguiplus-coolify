@@ -2,6 +2,10 @@ from flask import Flask, render_template, request, jsonify
 import os
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import psutil
+import json
+import tomli_w
+from pathlib import Path
 
 # Import OpenManus components
 from app.llm import LLM
@@ -74,7 +78,22 @@ def chat():
 @app.route("/api/models", methods=["GET"])
 def get_models():
     """API endpoint to get available models"""
-    # This would be replaced with actual model listing from config
+    # Get actual models from config
+    models = []
+
+    for model_name, model_config in config.llm.items():
+        if model_name != "default":  # Skip default config
+            model_info = {
+                "id": model_name,
+                "name": model_config.model,
+                "base_url": model_config.base_url,
+                "api_type": model_config.api_type,
+                "features": ["web_access", "file_upload", "code_execution", "tool_use"],
+            }
+            models.append(model_info)
+
+    # If no models found, provide defaults
+    if not models:
     models = [
         {
             "id": "gpt-4o",
@@ -85,16 +104,6 @@ def get_models():
             "id": "claude-3-opus",
             "name": "Claude 3 Opus",
             "features": ["web_access", "file_upload", "code_execution", "tool_use"],
-        },
-        {
-            "id": "claude-3-sonnet",
-            "name": "Claude 3 Sonnet",
-            "features": ["web_access", "file_upload", "code_execution"],
-        },
-        {
-            "id": "llama-3",
-            "name": "Llama 3",
-            "features": ["file_upload", "code_execution"],
         },
     ]
 
@@ -168,21 +177,164 @@ def upload_file():
 def settings():
     """API endpoint for user settings"""
     if request.method == "GET":
-        # This would be replaced with actual user settings retrieval
-        settings = {
+        # Return actual configuration
+        llm_settings = {}
+        for model_name, model_config in config.llm.items():
+            # Remove sensitive information for display
+            display_config = {
+                "model": model_config.model,
+                "base_url": model_config.base_url,
+                "api_key_set": bool(model_config.api_key),  # Don't send actual API key
+                "temperature": model_config.temperature,
+                "max_tokens": model_config.max_tokens,
+                "api_type": model_config.api_type,
+                "api_version": model_config.api_version,
+            }
+            llm_settings[model_name] = display_config
+
+        # Add other configuration sections
+        browser_config = {}
+        if config.browser_config:
+            browser_config = {
+                "headless": config.browser_config.headless,
+                "disable_security": config.browser_config.disable_security,
+                "max_content_length": config.browser_config.max_content_length,
+            }
+
+        # User interface settings (these would normally be stored per user)
+        ui_settings = {
             "theme": "dark",
-            "default_model": "gpt-4o",
-            "temperature": 0.7,
             "save_conversations": True,
             "allow_web_searches": True,
             "data_retention_days": 30,
         }
-        return jsonify(settings)
+
+        return jsonify(
+            {"llm": llm_settings, "browser": browser_config, "ui": ui_settings}
+        )
     else:
         # Update settings
         data = request.json
-        # In a real implementation, this would update user settings
-        return jsonify({"success": True, "settings": data})
+        if not data:
+            return jsonify({"error": "No settings provided"}), 400
+
+        try:
+            # In a real implementation, this would update the configuration file
+            # For now, just return success
+            return jsonify(
+                {"success": True, "message": "Settings updated successfully"}
+            )
+        except Exception as e:
+            return jsonify({"error": f"Failed to update settings: {str(e)}"}), 500
+
+
+@app.route("/api/config", methods=["GET", "POST"])
+def manage_config():
+    """API endpoint for complete configuration management"""
+    if request.method == "GET":
+        # Read the current config file
+        config_path = config._get_config_path()
+        try:
+            with open(config_path, "rb") as f:
+                config_data = tomli.load(f)
+                # Mask API keys for security
+                if "llm" in config_data:
+                    for key in config_data["llm"]:
+                        if (
+                            isinstance(config_data["llm"][key], dict)
+                            and "api_key" in config_data["llm"][key]
+                        ):
+                            config_data["llm"][key]["api_key"] = "••••••"
+                return jsonify({"config": config_data, "path": str(config_path)})
+        except Exception as e:
+            return jsonify({"error": f"Failed to read config: {str(e)}"}), 500
+    else:
+        # Update the config file
+        data = request.json
+        if not data or "config" not in data:
+            return jsonify({"error": "No configuration provided"}), 400
+
+        try:
+            # Write the updated config
+            config_path = config._get_config_path()
+            config_data = data["config"]
+
+            # Handle API keys (only update if not masked)
+            current_config = {}
+            with open(config_path, "rb") as f:
+                current_config = tomli.load(f)
+
+            # Preserve existing API keys if they're masked in the new config
+            if "llm" in config_data and "llm" in current_config:
+                for key in config_data["llm"]:
+                    if (
+                        isinstance(config_data["llm"][key], dict)
+                        and "api_key" in config_data["llm"][key]
+                    ):
+                        if config_data["llm"][key]["api_key"] == "••••••":
+                            # Keep the original API key
+                            if key in current_config["llm"] and isinstance(
+                                current_config["llm"][key], dict
+                            ):
+                                config_data["llm"][key]["api_key"] = current_config[
+                                    "llm"
+                                ][key].get("api_key", "")
+
+            # Write the updated config
+            with open(config_path, "wb") as f:
+                tomli_w.dump(config_data, f)
+
+            # Reload the configuration
+            config._load_initial_config()
+
+            return jsonify(
+                {"success": True, "message": "Configuration updated successfully"}
+            )
+        except Exception as e:
+            return jsonify({"error": f"Failed to update config: {str(e)}"}), 500
+
+
+@app.route("/api/system/stats", methods=["GET"])
+def system_stats():
+    """API endpoint to get system resource usage"""
+    try:
+        # Get CPU usage
+        cpu_percent = psutil.cpu_percent(interval=0.5)
+        cpu_count = psutil.cpu_count()
+        cpu_freq = psutil.cpu_freq()
+
+        # Get memory usage
+        memory = psutil.virtual_memory()
+
+        # Get disk usage
+        disk = psutil.disk_usage("/")
+
+        # Format the data
+        stats = {
+            "cpu": {
+                "percent": cpu_percent,
+                "cores": cpu_count,
+                "frequency": cpu_freq.current if cpu_freq else None,
+                "per_core": psutil.cpu_percent(interval=0.5, percpu=True),
+            },
+            "memory": {
+                "total": memory.total,
+                "available": memory.available,
+                "percent": memory.percent,
+                "used": memory.used,
+                "free": memory.free,
+            },
+            "disk": {
+                "total": disk.total,
+                "used": disk.used,
+                "free": disk.free,
+                "percent": disk.percent,
+            },
+        }
+
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": f"Failed to get system stats: {str(e)}"}), 500
 
 
 # Async functions for AI processing

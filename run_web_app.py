@@ -8,6 +8,13 @@ Run this script to start the web interface.
 
 import os
 import logging
+import sys
+from pathlib import Path
+
+# Add the parent directory to sys.path to ensure imports work correctly
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# Import web app and config
 from app.web_app import app
 from app.config import config
 from app.logger import setup_logger
@@ -29,6 +36,11 @@ def main():
 
         # Get debug mode from config or environment, default to False in production
         debug = os.environ.get("DEBUG", config.get("web", {}).get("debug", False))
+
+        # Print access information
+        print(f"OpenManus Web Dashboard is running!")
+        print(f"Access the dashboard at: http://localhost:{port}")
+        print(f"Press Ctrl+C to stop the server.")
 
         # Run the Flask app
         logger.info(f"Web UI available at http://localhost:{port}")

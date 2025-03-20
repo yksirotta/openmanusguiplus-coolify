@@ -674,3 +674,626 @@ function getBasePath() {
 function capitalize(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
+
+// System Monitor functionality
+let systemStatsInterval;
+let cpuData = [];
+let memoryData = [];
+let cpuChart, memoryChart, diskChart;
+const maxDataPoints = 20;
+
+// Initialize system monitoring
+function initSystemMonitor() {
+    // Update the basic monitor on the sidebar
+    updateBasicSystemStats();
+
+    // Set up interval for continuous updates
+    if (!systemStatsInterval) {
+        systemStatsInterval = setInterval(updateBasicSystemStats, 5000);
+    }
+
+    // Set up detailed stats viewer
+    const viewStatsBtn = document.getElementById('view-detailed-stats');
+    if (viewStatsBtn) {
+        viewStatsBtn.addEventListener('click', showSystemMonitorModal);
+    }
+}
+
+// Update the basic system stats display
+function updateBasicSystemStats() {
+    fetch('/api/system/stats')
+        .then(response => response.json())
+        .then(data => {
+            // Update CPU usage
+            const cpuBar = document.getElementById('cpu-bar');
+            const cpuValue = document.getElementById('cpu-value');
+            if (cpuBar && cpuValue) {
+                cpuBar.style.width = `${data.cpu.percent}%`;
+                cpuValue.textContent = `${data.cpu.percent}%`;
+            }
+
+            // Update RAM usage
+            const ramBar = document.getElementById('ram-bar');
+            const ramValue = document.getElementById('ram-value');
+            if (ramBar && ramValue) {
+                ramBar.style.width = `${data.memory.percent}%`;
+                ramValue.textContent = `${data.memory.percent}%`;
+            }
+
+            // Update Disk usage
+            const diskBar = document.getElementById('disk-bar');
+            const diskValue = document.getElementById('disk-value');
+            if (diskBar && diskValue) {
+                diskBar.style.width = `${data.disk.percent}%`;
+                diskValue.textContent = `${data.disk.percent}%`;
+            }
+        })
+        .catch(error => console.error('Error fetching system stats:', error));
+}
+
+// Show the detailed system monitor modal
+function showSystemMonitorModal() {
+    const modal = document.getElementById('system-monitor-modal');
+    if (modal) {
+        // Show the modal
+        modal.classList.add('active');
+
+        // Initialize charts if needed
+        initSystemCharts();
+
+        // Update stats immediately and start interval
+        updateDetailedSystemStats();
+
+        // Set up interval for continuous updates
+        const detailedStatsInterval = setInterval(updateDetailedSystemStats, 2000);
+
+        // Clear interval when modal is closed
+        const closeButtons = modal.querySelectorAll('.close-modal');
+        closeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                clearInterval(detailedStatsInterval);
+                modal.classList.remove('active');
+            });
+        });
+    }
+}
+
+// Initialize the system monitoring charts
+function initSystemCharts() {
+    const cpuCtx = document.getElementById('cpu-chart');
+    const memoryCtx = document.getElementById('memory-chart');
+    const diskCtx = document.getElementById('disk-chart');
+
+    if (cpuCtx && !cpuChart) {
+        cpuChart = new Chart(cpuCtx, {
+            type: 'line',
+            data: {
+                labels: Array(maxDataPoints).fill(''),
+                datasets: [{
+                    label: 'CPU Usage (%)',
+                    data: Array(maxDataPoints).fill(0),
+                    borderColor: '#4CAF50',
+                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: (value) => `${value}%`
+                        }
+                    }
+                },
+                animation: {
+                    duration: 500
+                }
+            }
+        });
+    }
+
+    if (memoryCtx && !memoryChart) {
+        memoryChart = new Chart(memoryCtx, {
+            type: 'line',
+            data: {
+                labels: Array(maxDataPoints).fill(''),
+                datasets: [{
+                    label: 'Memory Usage (%)',
+                    data: Array(maxDataPoints).fill(0),
+                    borderColor: '#2196F3',
+                    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: (value) => `${value}%`
+                        }
+                    }
+                },
+                animation: {
+                    duration: 500
+                }
+            }
+        });
+    }
+
+    if (diskCtx && !diskChart) {
+        diskChart = new Chart(diskCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Used', 'Free'],
+                datasets: [{
+                    data: [0, 100],
+                    backgroundColor: ['#FF9800', '#E0E0E0'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                animation: {
+                    duration: 500
+                }
+            }
+        });
+    }
+}
+
+// Update the detailed system stats
+function updateDetailedSystemStats() {
+    fetch('/api/system/stats')
+        .then(response => response.json())
+        .then(data => {
+            // Update CPU tab
+            document.getElementById('cpu-percent').textContent = `${data.cpu.percent}%`;
+            document.getElementById('cpu-cores').textContent = data.cpu.cores;
+            document.getElementById('cpu-freq').textContent = data.cpu.frequency ? `${Math.round(data.cpu.frequency)} MHz` : 'N/A';
+
+            // Update per-core display
+            updateCoreUsage(data.cpu.per_core);
+
+            // Update memory tab
+            document.getElementById('memory-percent').textContent = `${data.memory.percent}%`;
+            document.getElementById('memory-total').textContent = formatBytes(data.memory.total);
+            document.getElementById('memory-available').textContent = formatBytes(data.memory.available);
+            document.getElementById('memory-used').textContent = formatBytes(data.memory.used);
+
+            // Update disk tab
+            document.getElementById('disk-percent').textContent = `${data.disk.percent}%`;
+            document.getElementById('disk-total').textContent = formatBytes(data.disk.total);
+            document.getElementById('disk-used').textContent = formatBytes(data.disk.used);
+            document.getElementById('disk-free').textContent = formatBytes(data.disk.free);
+
+            // Update charts
+            updateSystemCharts(data);
+        })
+        .catch(error => console.error('Error fetching detailed system stats:', error));
+}
+
+// Update the core usage display
+function updateCoreUsage(coreData) {
+    const coreGrid = document.getElementById('core-usage-grid');
+    if (!coreGrid) return;
+
+    // Clear existing cores
+    coreGrid.innerHTML = '';
+
+    // Add each core
+    coreData.forEach((usage, index) => {
+        const coreItem = document.createElement('div');
+        coreItem.className = 'core-item';
+
+        const coreName = document.createElement('div');
+        coreName.className = 'core-name';
+        coreName.textContent = `Core ${index + 1}`;
+
+        const corePercent = document.createElement('div');
+        corePercent.className = 'core-percent';
+        corePercent.textContent = `${usage}%`;
+
+        coreItem.appendChild(coreName);
+        coreItem.appendChild(corePercent);
+        coreGrid.appendChild(coreItem);
+    });
+}
+
+// Update the system monitoring charts
+function updateSystemCharts(data) {
+    const timestamp = new Date().toLocaleTimeString();
+
+    // Update CPU chart
+    if (cpuChart) {
+        cpuChart.data.labels.shift();
+        cpuChart.data.labels.push(timestamp);
+        cpuChart.data.datasets[0].data.shift();
+        cpuChart.data.datasets[0].data.push(data.cpu.percent);
+        cpuChart.update();
+    }
+
+    // Update Memory chart
+    if (memoryChart) {
+        memoryChart.data.labels.shift();
+        memoryChart.data.labels.push(timestamp);
+        memoryChart.data.datasets[0].data.shift();
+        memoryChart.data.datasets[0].data.push(data.memory.percent);
+        memoryChart.update();
+    }
+
+    // Update Disk chart
+    if (diskChart) {
+        diskChart.data.datasets[0].data = [data.disk.percent, 100 - data.disk.percent];
+        diskChart.update();
+    }
+}
+
+// Format bytes to human-readable format
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// Configuration Management
+function initConfigurationManager() {
+    // Load configuration when the modal is opened
+    document.querySelectorAll('[data-modal="config-modal"]').forEach(trigger => {
+        trigger.addEventListener('click', loadConfiguration);
+    });
+
+    // Set up tab switching in configuration modal
+    document.querySelectorAll('#config-modal .tab-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            // Hide all tab contents
+            document.querySelectorAll('#config-modal .tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Deactivate all tab buttons
+            document.querySelectorAll('#config-modal .tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Activate clicked tab
+            this.classList.add('active');
+            const tabId = this.dataset.tab + '-tab';
+            document.getElementById(tabId).classList.add('active');
+        });
+    });
+
+    // Set up add model button
+    document.getElementById('add-model-btn')?.addEventListener('click', addNewModel);
+
+    // Set up save configuration button
+    document.getElementById('save-config')?.addEventListener('click', saveConfiguration);
+}
+
+// Load configuration data from the server
+function loadConfiguration() {
+    fetch('/api/config')
+        .then(response => response.json())
+        .then(data => {
+            if (data.config) {
+                populateConfigurationForm(data.config);
+            }
+        })
+        .catch(error => console.error('Error loading configuration:', error));
+}
+
+// Populate the configuration form with data
+function populateConfigurationForm(config) {
+    // Clear existing model list
+    const modelList = document.getElementById('model-list');
+    if (modelList) {
+        modelList.innerHTML = '';
+
+        // If LLM configuration exists, add each model
+        if (config.llm) {
+            for (const [name, settings] of Object.entries(config.llm)) {
+                if (typeof settings === 'object' && name !== 'default') {
+                    addModelToList(name, settings);
+                }
+            }
+        }
+    }
+
+    // Populate browser settings
+    if (config.browser) {
+        document.getElementById('browser-headless').checked = config.browser.headless || false;
+        document.getElementById('browser-disable-security').checked = config.browser.disable_security || false;
+        document.getElementById('browser-max-content').value = config.browser.max_content_length || 2000;
+        document.getElementById('browser-chrome-path').value = config.browser.chrome_instance_path || '';
+    }
+
+    // Populate search settings
+    if (config.search) {
+        document.getElementById('search-engine').value = config.search.engine || 'Google';
+        document.getElementById('search-retry-delay').value = config.search.retry_delay || 60;
+        document.getElementById('search-max-retries').value = config.search.max_retries || 3;
+
+        // Set fallback engines
+        const fallbacks = config.search.fallback_engines || [];
+        document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = fallbacks.includes(checkbox.value);
+        });
+    }
+
+    // Populate sandbox settings
+    if (config.sandbox) {
+        document.getElementById('sandbox-use').checked = config.sandbox.use_sandbox || false;
+        document.getElementById('sandbox-image').value = config.sandbox.image || 'python:3.12-slim';
+        document.getElementById('sandbox-work-dir').value = config.sandbox.work_dir || '/workspace';
+        document.getElementById('sandbox-memory').value = config.sandbox.memory_limit || '512m';
+        document.getElementById('sandbox-cpu').value = config.sandbox.cpu_limit || 1.0;
+        document.getElementById('sandbox-timeout').value = config.sandbox.timeout || 300;
+        document.getElementById('sandbox-network').checked = config.sandbox.network_enabled || false;
+    }
+}
+
+// Add a new model to the configuration
+function addNewModel() {
+    const modelName = prompt('Enter a name for the new model:');
+    if (modelName && modelName.trim()) {
+        // Create default settings
+        const defaultSettings = {
+            model: 'gpt-4o',
+            base_url: 'https://api.openai.com/v1',
+            api_key: '',
+            max_tokens: 4096,
+            temperature: 0.7,
+            api_type: 'openai',
+            api_version: ''
+        };
+
+        // Add to the list
+        addModelToList(modelName.trim(), defaultSettings);
+    }
+}
+
+// Add a model to the configuration list
+function addModelToList(name, settings) {
+    const modelList = document.getElementById('model-list');
+    if (!modelList) return;
+
+    // Clone the template
+    const template = document.getElementById('model-template');
+    const modelEntry = template.content.cloneNode(true);
+
+    // Set model name
+    modelEntry.querySelector('.model-name').textContent = name;
+
+    // Set data attributes for identification
+    const entryDiv = modelEntry.querySelector('.model-entry');
+    entryDiv.dataset.modelName = name;
+
+    // Set field values
+    modelEntry.querySelector('.model-type').value = settings.model || '';
+    modelEntry.querySelector('.model-base-url').value = settings.base_url || '';
+    modelEntry.querySelector('.model-api-key').value = settings.api_key || '';
+    modelEntry.querySelector('.model-temperature').value = settings.temperature || 0.7;
+    modelEntry.querySelector('.temperature-value').textContent = settings.temperature || 0.7;
+    modelEntry.querySelector('.model-max-tokens').value = settings.max_tokens || 4096;
+
+    // Set API type
+    const apiTypeSelect = modelEntry.querySelector('.model-api-type');
+    if (apiTypeSelect) {
+        const apiType = settings.api_type || 'openai';
+        for (let i = 0; i < apiTypeSelect.options.length; i++) {
+            if (apiTypeSelect.options[i].value === apiType) {
+                apiTypeSelect.selectedIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Set up temperature slider
+    const tempSlider = modelEntry.querySelector('.model-temperature');
+    const tempValue = modelEntry.querySelector('.temperature-value');
+    if (tempSlider && tempValue) {
+        tempSlider.addEventListener('input', function () {
+            tempValue.textContent = this.value;
+        });
+    }
+
+    // Set up toggle password
+    const toggleBtn = modelEntry.querySelector('.toggle-password');
+    const passwordInput = modelEntry.querySelector('.model-api-key');
+    if (toggleBtn && passwordInput) {
+        toggleBtn.addEventListener('click', function () {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            toggleBtn.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+        });
+    }
+
+    // Set up delete button
+    const deleteBtn = modelEntry.querySelector('.model-delete');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function () {
+            if (confirm(`Are you sure you want to delete model "${name}"?`)) {
+                entryDiv.remove();
+            }
+        });
+    }
+
+    // Add to the list
+    modelList.appendChild(entryDiv);
+}
+
+// Save the configuration to the server
+function saveConfiguration() {
+    // Build the configuration object
+    const config = {
+        llm: {}
+    };
+
+    // Get LLM models
+    document.querySelectorAll('.model-entry').forEach(entry => {
+        const name = entry.dataset.modelName;
+        if (name) {
+            config.llm[name] = {
+                model: entry.querySelector('.model-type').value,
+                base_url: entry.querySelector('.model-base-url').value,
+                api_key: entry.querySelector('.model-api-key').value,
+                max_tokens: parseInt(entry.querySelector('.model-max-tokens').value),
+                temperature: parseFloat(entry.querySelector('.model-temperature').value),
+                api_type: entry.querySelector('.model-api-type').value,
+                api_version: ''
+            };
+        }
+    });
+
+    // Get browser settings
+    config.browser = {
+        headless: document.getElementById('browser-headless').checked,
+        disable_security: document.getElementById('browser-disable-security').checked,
+        max_content_length: parseInt(document.getElementById('browser-max-content').value),
+        chrome_instance_path: document.getElementById('browser-chrome-path').value
+    };
+
+    // Get search settings
+    const fallbackEngines = [];
+    document.querySelectorAll('.checkbox-group input[type="checkbox"]:checked').forEach(checkbox => {
+        fallbackEngines.push(checkbox.value);
+    });
+
+    config.search = {
+        engine: document.getElementById('search-engine').value,
+        fallback_engines: fallbackEngines,
+        retry_delay: parseInt(document.getElementById('search-retry-delay').value),
+        max_retries: parseInt(document.getElementById('search-max-retries').value)
+    };
+
+    // Get sandbox settings
+    config.sandbox = {
+        use_sandbox: document.getElementById('sandbox-use').checked,
+        image: document.getElementById('sandbox-image').value,
+        work_dir: document.getElementById('sandbox-work-dir').value,
+        memory_limit: document.getElementById('sandbox-memory').value,
+        cpu_limit: parseFloat(document.getElementById('sandbox-cpu').value),
+        timeout: parseInt(document.getElementById('sandbox-timeout').value),
+        network_enabled: document.getElementById('sandbox-network').checked
+    };
+
+    // Send to server
+    fetch('/api/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ config })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Configuration saved successfully!');
+                document.querySelector('#config-modal .close-modal').click();
+            } else {
+                showToast('Error saving configuration: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error saving configuration:', error);
+            showToast('Error saving configuration: ' + error.message, 'error');
+        });
+}
+
+// Show a toast notification
+function showToast(message, type = 'success') {
+    const toast = document.querySelector('.toast');
+    if (toast) {
+        const icon = toast.querySelector('i');
+        if (icon) {
+            icon.className = type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
+        }
+
+        const messageSpan = toast.querySelector('span');
+        if (messageSpan) {
+            messageSpan.textContent = message;
+        }
+
+        toast.className = `toast ${type} show`;
+
+        setTimeout(() => {
+            toast.className = 'toast';
+        }, 3000);
+    }
+}
+
+// Set up tab switching
+function switchTab(tabId) {
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+
+    // Deactivate all tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    // Activate clicked tab
+    document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
+    document.getElementById(`${tabId}-tab`).classList.add('active');
+}
+
+// Initialize all new features
+document.addEventListener('DOMContentLoaded', function () {
+    // Initialize the original UI
+    initializeUI();
+
+    // Set up event listeners
+    setupEventListeners();
+
+    // Initialize system monitoring
+    initSystemMonitor();
+
+    // Initialize configuration manager
+    initConfigurationManager();
+
+    // Auto-resize textarea
+    const userInput = document.getElementById('user-input');
+    if (userInput) {
+        userInput.addEventListener('input', autoResizeTextarea);
+    }
+
+    // Set up modal handling
+    document.querySelectorAll('[data-modal]').forEach(button => {
+        button.addEventListener('click', function () {
+            const modalId = this.dataset.modal;
+            document.getElementById(modalId).classList.add('active');
+        });
+    });
+
+    document.querySelectorAll('.close-modal').forEach(button => {
+        button.addEventListener('click', function () {
+            this.closest('.modal').classList.remove('active');
+        });
+    });
+});
