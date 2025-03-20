@@ -83,39 +83,42 @@ uv pip install -r requirements.txt
 
 ### Method 3: One-Line Installation (Easy)
 
-For the quickest installation experience, you can use our one-line wget command:
+For the quickest installation experience, you can use our smart staged installer:
 
 ```bash
 wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash
 ```
 
-The installer includes smart disk space management and several options:
+Our smart installer automatically:
+- Checks disk space at each stage and adapts accordingly
+- Uses sparse checkouts to minimize downloaded content
+- Installs components in stages to prevent space issues
+- Cleans up temporary files and caches throughout installation
+- Provides detailed progress and error reporting
+
+**Installation Options:**
 
 ```bash
-# Minimal installation (no PyTorch or TensorFlow)
+# Minimal installation (no ML libs or PyTorch, saves ~1GB)
 wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --minimal
 
-# Skip PyTorch to save ~800MB of space
+# Skip just PyTorch (saves ~800MB)
 wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --skip-torch
 
-# Keep pip cache (default is to clean cache)
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --no-clean-cache
+# Basic installation only (minimal core functionality)
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --basic-only
+
+# Install to custom directory
+wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --install-dir=my_openmanus
 
 # Use custom virtual environment path
 wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash -s -- --env=/path/to/env
 ```
 
-The installer automatically:
-- Detects low disk space and offers appropriate options
-- Cleans pip cache to save space during installation
-- Installs large packages separately to better manage memory
-- Sets up a Python virtual environment
-- Configures basic settings
-
-After installation completes, navigate to the OpenManus directory:
+After installation, navigate to the installation directory:
 
 ```bash
-cd openmanusguiplus
+cd openmanusguiplus  # or your custom directory if specified
 ```
 
 ### Browser Automation Tool (Optional)
