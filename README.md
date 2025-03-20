@@ -45,6 +45,12 @@ We're also excited to introduce [OpenManus-RL](https://github.com/OpenManus/Open
 pip install -r requirements.txt
 ```
 
+If you encounter any issues with dependencies, you can install the core web UI requirements separately:
+
+```bash
+pip install flask flask-socketio flask-cors psutil tomli tomli_w
+```
+
 2. Configure your LLM provider(s) in the web UI or update the config file:
 
 ```
