@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenManus AI Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="OpenManus Logo" class="logo">
+                <h1>OpenManus</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li class="active"><a href="#"><i class="fas fa-home"></i> Dashboard</a></li>
+                    <li><a href="#"><i class="fas fa-history"></i> History</a></li>
+                    <li><a href="#"><i class="fas fa-star"></i> Favorites</a></li>
+                    <li><a href="#"><i class="fas fa-cog"></i> Settings</a></li>
+                    <li class="separator"></li>
+                    <li><a href="#"><i class="fas fa-code"></i> Playground</a></li>
+                    <li><a href="#"><i class="fas fa-robot"></i> API Access</a></li>
+                    <li><a href="#"><i class="fas fa-book"></i> Documentation</a></li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span id="status" class="status online"><i class="fas fa-circle"></i> Connected</span>
+                <div class="user-info">
+                    <img src="{{ url_for('static', filename='img/profile.jpg') }}" alt="User Profile"
+                        class="user-avatar">
+                    <span class="user-name">User</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main content area -->
+        <main class="main-content">
+            <header class="main-header">
+                <div class="search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search in conversations...">
+                </div>
+
+                <div class="header-controls">
+                    <button class="btn btn-transparent"><i class="fas fa-bell"></i></button>
+                    <button class="btn btn-transparent"><i class="fas fa-question-circle"></i></button>
+                    <button class="theme-toggle btn btn-transparent"><i class="fas fa-moon"></i></button>
+                </div>
+            </header>
+
+            <div class="conversation-container">
+                <!-- Model Selection Panel -->
+                <div class="model-selection-panel">
+                    <label for="model-select">AI Model:</label>
+                    <select id="model-select" class="model-select">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="claude-3-opus">Claude 3 Opus</option>
+                        <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                        <option value="llama-3">Llama 3</option>
+                    </select>
+
+                    <div class="model-features">
+                        <span class="feature-badge"><i class="fas fa-globe"></i> Web Access</span>
+                        <span class="feature-badge"><i class="fas fa-file"></i> File Upload</span>
+                        <span class="feature-badge"><i class="fas fa-code"></i> Code Execution</span>
+                        <span class="feature-badge"><i class="fas fa-robot"></i> Tool Use</span>
+                    </div>
+                </div>
+
+                <!-- Conversation area -->
+                <div class="conversation-area" id="conversation">
+                    <!-- Welcome message -->
+                    <div class="message assistant">
+                        <div class="message-avatar">
+                            <img src="{{ url_for('static', filename='img/assistant-avatar.png') }}" alt="Assistant">
+                        </div>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-sender">OpenManus AI</span>
+                                <span class="message-time">Now</span>
+                            </div>
+                            <div class="message-text">
+                                <p>👋 Hello! I'm your OpenManus AI assistant. What would you like to do today?</p>
+                                <div class="suggested-actions">
+                                    <button class="action-btn" data-action="web-search">Search the web</button>
+                                    <button class="action-btn" data-action="file-analysis">Analyze a file</button>
+                                    <button class="action-btn" data-action="coding">Help me code</button>
+                                    <button class="action-btn" data-action="brainstorm">Brainstorm ideas</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="message-controls">
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-copy"></i></button>
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-ellipsis-v"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Sample user message -->
+                    <div class="message user">
+                        <div class="message-avatar">
+                            <img src="{{ url_for('static', filename='img/profile.jpg') }}" alt="User">
+                        </div>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-sender">You</span>
+                                <span class="message-time">Just now</span>
+                            </div>
+                            <div class="message-text">
+                                <p>Can you explain how to use OpenManus to automate web tasks?</p>
+                            </div>
+                        </div>
+                        <div class="message-controls">
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-ellipsis-v"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Example response with rich content -->
+                    <div class="message assistant">
+                        <div class="message-avatar">
+                            <img src="{{ url_for('static', filename='img/assistant-avatar.png') }}" alt="Assistant">
+                        </div>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-sender">OpenManus AI</span>
+                                <span class="message-time">Just now</span>
+                            </div>
+                            <div class="message-text">
+                                <p>OpenManus can automate various web tasks using its browser automation capabilities.
+                                    Here's a simple guide:</p>
+
+                                <div class="rich-content">
+                                    <div class="code-block">
+                                        <div class="code-header">
+                                            <span>Python</span>
+                                            <button class="btn btn-transparent btn-sm"><i
+                                                    class="fas fa-copy"></i></button>
+                                        </div>
+                                        <pre><code>from browser_use import Browser
+
+# Initialize the browser
+browser = Browser()
+
+# Navigate to a website
+await browser.go_to_url("https://example.com")
+
+# Click on elements
+await browser.click_element(index=5)
+
+# Input text
+await browser.input_text(index=2, text="Hello, OpenManus!")</code></pre>
+                                    </div>
+
+                                    <div class="steps-container">
+                                        <h4>Key Steps:</h4>
+                                        <ol class="steps-list">
+                                            <li>Configure your API keys in config.toml</li>
+                                            <li>Import the Browser module</li>
+                                            <li>Create automation sequences</li>
+                                            <li>Run with python run_mcp.py</li>
+                                        </ol>
+                                    </div>
+
+                                    <div class="info-box">
+                                        <i class="fas fa-info-circle"></i>
+                                        <p>OpenManus uses Playwright under the hood to automate browsers. Make sure you
+                                            have it installed with <code>playwright install</code>.</p>
+                                    </div>
+                                </div>
+
+                                <p>Would you like me to help you set up a specific web automation task?</p>
+                            </div>
+                        </div>
+                        <div class="message-controls">
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-copy"></i></button>
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-thumbs-up"></i></button>
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-thumbs-down"></i></button>
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-ellipsis-v"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input area -->
+                <div class="input-area">
+                    <div class="input-box">
+                        <div class="input-controls">
+                            <button class="btn btn-transparent"><i class="fas fa-paperclip"></i></button>
+                            <button class="btn btn-transparent"><i class="fas fa-microphone"></i></button>
+                        </div>
+
+                        <div class="input-field">
+                            <textarea id="user-input" placeholder="Ask me anything..." rows="1"></textarea>
+
+                            <div class="input-actions">
+                                <div class="tool-access">
+                                    <button class="btn btn-transparent tool-btn"><i class="fas fa-tools"></i></button>
+                                    <div class="tools-dropdown">
+                                        <button class="tool-option" data-tool="web-search"><i class="fas fa-globe"></i>
+                                            Web Search</button>
+                                        <button class="tool-option" data-tool="file-upload"><i
+                                                class="fas fa-file-upload"></i> Upload File</button>
+                                        <button class="tool-option" data-tool="code-run"><i class="fas fa-code"></i> Run
+                                            Code</button>
+                                        <button class="tool-option" data-tool="calculator"><i
+                                                class="fas fa-calculator"></i> Calculator</button>
+                                        <button class="tool-option" data-tool="calendar"><i class="fas fa-calendar"></i>
+                                            Calendar</button>
+                                    </div>
+                                </div>
+                                <button id="send-button" class="btn btn-primary"><i
+                                        class="fas fa-paper-plane"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="context-panel">
+                        <div class="context-header">
+                            <h3>Current Context</h3>
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-trash"></i> Clear</button>
+                        </div>
+                        <div class="context-items">
+                            <div class="context-item">
+                                <i class="fas fa-globe"></i>
+                                <span>Web search: "OpenManus automation"</span>
+                                <button class="btn btn-transparent btn-sm"><i class="fas fa-times"></i></button>
+                            </div>
+                            <div class="context-item">
+                                <i class="fas fa-file-code"></i>
+                                <span>File: browser_example.py</span>
+                                <button class="btn btn-transparent btn-sm"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tools sidebar -->
+            <aside class="tools-sidebar collapsed">
+                <div class="tools-header">
+                    <h3>Tools & Integration</h3>
+                    <button class="btn btn-transparent btn-sm toggle-tools"><i class="fas fa-times"></i></button>
+                </div>
+
+                <div class="tools-container">
+                    <div class="tool-category">
+                        <h4>Web Tools</h4>
+                        <div class="tool-list">
+                            <button class="tool-item" data-tool="browser">
+                                <i class="fas fa-globe"></i>
+                                <span>Web Browser</span>
+                            </button>
+                            <button class="tool-item" data-tool="search">
+                                <i class="fas fa-search"></i>
+                                <span>Web Search</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="tool-category">
+                        <h4>Development</h4>
+                        <div class="tool-list">
+                            <button class="tool-item" data-tool="code-editor">
+                                <i class="fas fa-code"></i>
+                                <span>Code Editor</span>
+                            </button>
+                            <button class="tool-item" data-tool="terminal">
+                                <i class="fas fa-terminal"></i>
+                                <span>Terminal</span>
+                            </button>
+                            <button class="tool-item" data-tool="debugger">
+                                <i class="fas fa-bug"></i>
+                                <span>Debugger</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="tool-category">
+                        <h4>File Operations</h4>
+                        <div class="tool-list">
+                            <button class="tool-item" data-tool="file-upload">
+                                <i class="fas fa-file-upload"></i>
+                                <span>File Upload</span>
+                            </button>
+                            <button class="tool-item" data-tool="file-download">
+                                <i class="fas fa-file-download"></i>
+                                <span>File Download</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="tool-category">
+                        <h4>Integrations</h4>
+                        <div class="tool-list">
+                            <button class="tool-item" data-tool="github">
+                                <i class="fab fa-github"></i>
+                                <span>GitHub</span>
+                            </button>
+                            <button class="tool-item" data-tool="slack">
+                                <i class="fab fa-slack"></i>
+                                <span>Slack</span>
+                            </button>
+                            <button class="tool-item" data-tool="google-drive">
+                                <i class="fab fa-google-drive"></i>
+                                <span>Google Drive</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tools-footer">
+                    <button class="btn btn-outline-primary btn-block">
+                        <i class="fas fa-plus"></i> Add New Integration
+                    </button>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Visualization area (initially hidden) -->
+    <div class="visualization-panel hidden">
+        <div class="viz-header">
+            <h3>Visualization</h3>
+            <button class="btn btn-transparent btn-sm close-viz"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="viz-content">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="thinking">Thinking Process</button>
+                <button class="tab-btn" data-tab="tasks">Tasks</button>
+                <button class="tab-btn" data-tab="memory">Memory Usage</button>
+            </div>
+
+            <div class="tab-content" id="thinking-tab">
+                <div class="thinking-graph">
+                    <!-- Thinking process visualization will be rendered here -->
+                    <div class="placeholder-viz">
+                        <i class="fas fa-brain"></i>
+                        <p>AI thinking visualization will appear here</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content hidden" id="tasks-tab">
+                <div class="tasks-container">
+                    <!-- Task tracking will be rendered here -->
+                    <div class="task-item">
+                        <div class="task-header">
+                            <span class="task-name">Web Search</span>
+                            <span class="task-status completed">Completed</span>
+                        </div>
+                        <div class="task-details">
+                            <p>Search query: "OpenManus agent capabilities"</p>
+                            <div class="task-progress">
+                                <div class="progress-bar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="task-item">
+                        <div class="task-header">
+                            <span class="task-name">Code Generation</span>
+                            <span class="task-status in-progress">In Progress</span>
+                        </div>
+                        <div class="task-details">
+                            <p>Generating Python script for web automation</p>
+                            <div class="task-progress">
+                                <div class="progress-bar" style="width: 65%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content hidden" id="memory-tab">
+                <div class="memory-visualization">
+                    <!-- Memory usage visualization will be rendered here -->
+                    <div class="memory-chart">
+                        <div class="placeholder-viz">
+                            <i class="fas fa-memory"></i>
+                            <p>Memory usage will be displayed here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="btn btn-transparent btn-sm close-modal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>Appearance</h3>
+                    <div class="setting-item">
+                        <span>Theme</span>
+                        <div class="theme-options">
+                            <button class="theme-option" data-theme="light">Light</button>
+                            <button class="theme-option active" data-theme="dark">Dark</button>
+                            <button class="theme-option" data-theme="system">System</button>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Font Size</span>
+                        <div class="setting-control">
+                            <input type="range" min="12" max="20" value="16" id="font-size-slider">
+                            <span id="font-size-value">16px</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>AI Model Preferences</h3>
+                    <div class="setting-item">
+                        <span>Default Model</span>
+                        <select class="setting-select">
+                            <option value="gpt-4o">GPT-4o</option>
+                            <option value="claude-3-opus">Claude 3 Opus</option>
+                            <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                            <option value="llama-3">Llama 3</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Temperature</span>
+                        <div class="setting-control">
+                            <input type="range" min="0" max="1" step="0.1" value="0.7" id="temperature-slider">
+                            <span id="temperature-value">0.7</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Privacy & Data</h3>
+                    <div class="setting-item">
+                        <span>Save Conversations</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <span>Allow Web Searches</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <span>Data Retention Period</span>
+                        <select class="setting-select">
+                            <option value="7">7 days</option>
+                            <option value="30" selected>30 days</option>
+                            <option value="90">90 days</option>
+                            <option value="-1">Never delete</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-danger btn-sm">Clear All Conversation Data</button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Advanced</h3>
+                    <div class="setting-item">
+                        <span>API Endpoint</span>
+                        <input type="text" class="setting-input" value="https://api.openai.com/v1">
+                    </div>
+                    <div class="setting-item">
+                        <span>API Key</span>
+                        <div class="api-key-field">
+                            <input type="password" class="setting-input" value="sk-...">
+                            <button class="btn btn-transparent btn-sm"><i class="fas fa-eye"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary">Cancel</button>
+                <button class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div class="toast-container">
+        <div class="toast">
+            <i class="fas fa-check-circle"></i>
+            <span>Settings saved successfully!</span>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>
