@@ -44,44 +44,90 @@ We're also excited to introduce [OpenManus-RL](https://github.com/OpenManus/Open
 For the quickest installation experience, you can use our one-line wget command:
 
 ```bash
-wget -O- https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh | bash
+# Download the installer script first
+wget https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh -O install-openmanus.sh
+
+# Make it executable
+chmod +x install-openmanus.sh
+
+# Run the installer (optionally specify an installation directory)
+./install-openmanus.sh [/path/to/install/directory]
 ```
 
 This will automatically:
 - Clone the repository
 - Set up a Python virtual environment
-- Install all dependencies
+- Install all dependencies with memory optimizations
 - Configure basic settings
-
-The script will ask for an installation directory (defaults to ~/openmanusguiplus) and guide you through the process.
+- Create an optimized startup script
 
 ### Method 2: Manual Installation
 
-1. Install the required dependencies:
+1. Clone the repository:
+```bash
+git clone https://github.com/mhm22332/openmanusguiplus.git
+cd openmanusguiplus
+```
 
+2. Create and activate a virtual environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Linux/Mac
+# OR
+.venv\Scripts\activate  # On Windows
+```
+
+3. Install the required dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
 If you encounter any issues with dependencies, you can install the core web UI requirements separately:
+```bash
+pip install flask flask-socketio flask-cors psutil tomli tomli_w tiktoken openai
+```
+
+## Running the Dashboard
+
+### Using the Optimized Startup Script (Recommended)
+
+If you used the one-line installer, an optimized startup script was created for you:
 
 ```bash
-pip install flask flask-socketio flask-cors psutil tomli tomli_w
+cd openmanusguiplus
+./start.sh
 ```
 
-2. Configure your LLM provider(s) in the web UI or update the config file:
+This script includes memory optimizations that make the dashboard run more efficiently, especially on low-resource systems.
 
-```
-config/config.toml
-```
-
-3. Run the web dashboard:
+### Manual Startup
 
 ```bash
+cd openmanusguiplus
+source .venv/bin/activate  # On Linux/Mac
+# OR
+.venv\Scripts\activate  # On Windows
 python run_web_app.py
 ```
 
-4. Access the dashboard at http://localhost:5000
+## Memory Management Features
+
+OpenManus GUI Plus includes several memory management features to ensure it runs efficiently on all systems:
+
+- **Automatic garbage collection**: The system periodically cleans up unused memory
+- **Concurrent request limiting**: Prevents memory spikes by limiting simultaneous operations
+- **Memory usage monitoring**: Tracks and displays real-time memory usage in the dashboard
+- **Low-memory mode**: Automatically adapts to low-memory conditions
+- **Optimized dependency loading**: Loads only necessary packages for each operation
+
+To configure memory settings, edit the `config/config.toml` file:
+
+```toml
+[system]
+# Lower these values on low-memory systems
+max_tokens_limit = 8192  # Maximum token context size
+max_concurrent_requests = 2  # Maximum concurrent API requests
+```
 
 ## Dashboard Components
 

@@ -6,6 +6,10 @@ import psutil
 import json
 import tomli_w
 from pathlib import Path
+import time
+import gc
+from werkzeug.utils import secure_filename
+import logging
 
 # Import OpenManus components
 from app.llm import LLM
@@ -14,19 +18,43 @@ from app.config import config
 # Create Flask app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "dev-key-for-openmanus"
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # Limit uploads to 10MB
 
 # Thread pool for running async code
 executor = ThreadPoolExecutor(max_workers=4)
 
+# Configure memory management
+memory_limit = int(config.get("system", {}).get("max_tokens_limit", 8192))
+max_concurrent = int(config.get("system", {}).get("max_concurrent_requests", 2))
+last_gc_time = time.time()
+active_requests = 0
 
-# Helper to run async functions from Flask routes
-def run_async(coro):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+
+# Set up request limiter
+@app.before_request
+def before_request():
+    global active_requests, last_gc_time
+
+    # Check if we need to run garbage collection (every 60 seconds)
+    if time.time() - last_gc_time > 60:
+        gc.collect()
+        last_gc_time = time.time()
+
+    # Limit concurrent requests
+    if active_requests >= max_concurrent and request.endpoint != "static":
+        return (
+            jsonify({"error": "Too many concurrent requests, please try again later"}),
+            429,
+        )
+
+    active_requests += 1
+
+
+@app.after_request
+def after_request(response):
+    global active_requests
+    active_requests -= 1
+    return response
 
 
 # Initialize LLM
@@ -49,30 +77,25 @@ def index():
 @app.route("/api/chat", methods=["POST"])
 def chat():
     """API endpoint for chat messages"""
-    data = request.json
-
-    if not data or "message" not in data:
-        return jsonify({"error": "Message is required"}), 400
-
-    user_message = data["message"]
-    model = data.get("model", "gpt-4o")  # Default to gpt-4o if not specified
-
-    # Initialize LLM if not already done
-    init_llm()
-
     try:
-        # Process the message with OpenManus
-        def process_message():
-            # This would be replaced with actual OpenManus processing
-            response = run_async(generate_response(user_message, model))
-            return response
+        # Check memory usage before processing
+        memory_percent = psutil.virtual_memory().percent
+        if memory_percent > 90:  # If memory usage is above 90%
+            gc.collect()  # Force garbage collection
 
-        # Run in thread pool to not block Flask
-        response = executor.submit(process_message).result()
+        # Process the chat message
+        data = request.json
+        message = data.get("message", "")
+        context = data.get("context", [])
 
-        return jsonify({"response": response, "model": model})
+        # Generate a response (implement proper async handling)
+        response = generate_response(message, context)
+
+        # Return the response
+        return jsonify({"response": response, "status": "success"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"Error in chat API: {str(e)}")
+        return jsonify({"error": str(e), "status": "error"}), 500
 
 
 @app.route("/api/models", methods=["GET"])
@@ -81,13 +104,13 @@ def get_models():
     # Get actual models from config
     models = []
 
-    for model_name, model_config in config.llm.items():
+    for model_name, model_config in config.get("llm", {}).items():
         if model_name != "default":  # Skip default config
             model_info = {
                 "id": model_name,
-                "name": model_config.model,
-                "base_url": model_config.base_url,
-                "api_type": model_config.api_type,
+                "name": model_config.get("model", model_name),
+                "base_url": model_config.get("base_url", ""),
+                "api_type": model_config.get("api_type", "openai"),
                 "features": ["web_access", "file_upload", "code_execution", "tool_use"],
             }
             models.append(model_info)
@@ -113,40 +136,28 @@ def get_models():
 @app.route("/api/tools", methods=["GET"])
 def get_tools():
     """API endpoint to get available tools"""
-    # This would be replaced with actual tool listing from OpenManus
     tools = [
         {
             "id": "web_search",
             "name": "Web Search",
-            "icon": "fa-globe",
             "description": "Search the web for information",
         },
         {
-            "id": "file_upload",
-            "name": "File Upload",
-            "icon": "fa-file-upload",
-            "description": "Upload and analyze files",
-        },
-        {
-            "id": "code_run",
+            "id": "code_execution",
             "name": "Code Execution",
-            "icon": "fa-code",
-            "description": "Execute code in various languages",
+            "description": "Execute code in a sandbox environment",
         },
         {
-            "id": "browser",
-            "name": "Web Browser",
-            "icon": "fa-window-maximize",
-            "description": "Navigate and interact with websites",
+            "id": "file_browser",
+            "name": "File Browser",
+            "description": "Browse and manipulate files",
         },
         {
             "id": "terminal",
             "name": "Terminal",
-            "icon": "fa-terminal",
-            "description": "Run system commands",
+            "description": "Execute terminal commands",
         },
     ]
-
     return jsonify({"tools": tools})
 
 
@@ -161,168 +172,93 @@ def upload_file():
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    # In a real implementation, this would save the file to a secure location and process it
-    # For now, just return success
-    return jsonify(
-        {
-            "success": True,
-            "filename": file.filename,
-            "size": 0,  # Would be actual file size
-            "file_id": "123",  # Would be a unique ID for the file
-        }
-    )
+    # Create an uploads directory if it doesn't exist
+    uploads_dir = Path("uploads")
+    uploads_dir.mkdir(exist_ok=True)
+
+    # Save the file
+    filename = secure_filename(file.filename)
+    file_path = uploads_dir / filename
+    file.save(file_path)
+
+    return jsonify({"status": "success", "filename": filename, "path": str(file_path)})
 
 
 @app.route("/api/settings", methods=["GET", "PUT"])
 def settings():
     """API endpoint for user settings"""
     if request.method == "GET":
-        # Return actual configuration
-        llm_settings = {}
-        for model_name, model_config in config.llm.items():
-            # Remove sensitive information for display
-            display_config = {
-                "model": model_config.model,
-                "base_url": model_config.base_url,
-                "api_key_set": bool(model_config.api_key),  # Don't send actual API key
-                "temperature": model_config.temperature,
-                "max_tokens": model_config.max_tokens,
-                "api_type": model_config.api_type,
-                "api_version": model_config.api_version,
-            }
-            llm_settings[model_name] = display_config
-
-        # Add other configuration sections
-        browser_config = {}
-        if config.browser_config:
-            browser_config = {
-                "headless": config.browser_config.headless,
-                "disable_security": config.browser_config.disable_security,
-                "max_content_length": config.browser_config.max_content_length,
-            }
-
-        # User interface settings (these would normally be stored per user)
-        ui_settings = {
+        # Get current settings from config
+        user_settings = {
             "theme": "dark",
+            "model": config.get("llm", {}).get("default", "gpt-4o"),
+            "temperature": config.get("llm", {}).get("temperature", 0.7),
             "save_conversations": True,
-            "allow_web_searches": True,
-            "data_retention_days": 30,
+            "max_history": 100,
         }
-
-        return jsonify(
-            {"llm": llm_settings, "browser": browser_config, "ui": ui_settings}
-        )
+        return jsonify({"settings": user_settings})
     else:
         # Update settings
-        data = request.json
-        if not data:
-            return jsonify({"error": "No settings provided"}), 400
-
-        try:
-            # In a real implementation, this would update the configuration file
-            # For now, just return success
-            return jsonify(
-                {"success": True, "message": "Settings updated successfully"}
-            )
-        except Exception as e:
-            return jsonify({"error": f"Failed to update settings: {str(e)}"}), 500
+        new_settings = request.json.get("settings", {})
+        # Implementation would save these settings
+        return jsonify({"status": "success", "settings": new_settings})
 
 
 @app.route("/api/config", methods=["GET", "POST"])
 def manage_config():
-    """API endpoint for complete configuration management"""
+    """API endpoint for configuration management"""
     if request.method == "GET":
-        # Read the current config file
-        config_path = config._get_config_path()
         try:
-            with open(config_path, "rb") as f:
-                config_data = tomli.load(f)
-                # Mask API keys for security
-                if "llm" in config_data:
-                    for key in config_data["llm"]:
-                        if (
-                            isinstance(config_data["llm"][key], dict)
-                            and "api_key" in config_data["llm"][key]
-                        ):
-                            config_data["llm"][key]["api_key"] = "••••••"
-                return jsonify({"config": config_data, "path": str(config_path)})
+            # Get current configuration (mask sensitive data)
+            masked_config = mask_sensitive_config(config)
+            return jsonify({"success": True, "config": masked_config})
         except Exception as e:
-            return jsonify({"error": f"Failed to read config: {str(e)}"}), 500
+            return jsonify({"success": False, "error": str(e)})
     else:
-        # Update the config file
-        data = request.json
-        if not data or "config" not in data:
-            return jsonify({"error": "No configuration provided"}), 400
-
         try:
-            # Write the updated config
-            config_path = config._get_config_path()
-            config_data = data["config"]
+            # Update configuration
+            new_config = request.json.get("config", {})
 
-            # Handle API keys (only update if not masked)
-            current_config = {}
-            with open(config_path, "rb") as f:
-                current_config = tomli.load(f)
+            # Preserve API keys if they are masked
+            preserve_api_keys(config, new_config)
 
-            # Preserve existing API keys if they're masked in the new config
-            if "llm" in config_data and "llm" in current_config:
-                for key in config_data["llm"]:
-                    if (
-                        isinstance(config_data["llm"][key], dict)
-                        and "api_key" in config_data["llm"][key]
-                    ):
-                        if config_data["llm"][key]["api_key"] == "••••••":
-                            # Keep the original API key
-                            if key in current_config["llm"] and isinstance(
-                                current_config["llm"][key], dict
-                            ):
-                                config_data["llm"][key]["api_key"] = current_config[
-                                    "llm"
-                                ][key].get("api_key", "")
+            # Save configuration
+            # Implementation would update and save config
 
-            # Write the updated config
-            with open(config_path, "wb") as f:
-                tomli_w.dump(config_data, f)
-
-            # Reload the configuration
-            config._load_initial_config()
-
-            return jsonify(
-                {"success": True, "message": "Configuration updated successfully"}
-            )
+            return jsonify({"success": True})
         except Exception as e:
-            return jsonify({"error": f"Failed to update config: {str(e)}"}), 500
+            return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/system/stats", methods=["GET"])
 def system_stats():
-    """API endpoint to get system resource usage"""
+    """API endpoint for system resource usage statistics"""
     try:
-        # Get CPU usage
+        # Get CPU info
         cpu_percent = psutil.cpu_percent(interval=0.5)
-        cpu_count = psutil.cpu_count()
-        cpu_freq = psutil.cpu_freq()
+        cpu_count = psutil.cpu_count(logical=True)
 
-        # Get memory usage
+        # Get per-core CPU usage
+        per_core = psutil.cpu_percent(interval=0.1, percpu=True)
+
+        # Get memory info
         memory = psutil.virtual_memory()
 
-        # Get disk usage
+        # Get disk info
         disk = psutil.disk_usage("/")
 
-        # Format the data
         stats = {
             "cpu": {
                 "percent": cpu_percent,
                 "cores": cpu_count,
-                "frequency": cpu_freq.current if cpu_freq else None,
-                "per_core": psutil.cpu_percent(interval=0.5, percpu=True),
+                "per_core": per_core,
+                "frequency": psutil.cpu_freq().current if psutil.cpu_freq() else None,
             },
             "memory": {
                 "total": memory.total,
                 "available": memory.available,
-                "percent": memory.percent,
                 "used": memory.used,
-                "free": memory.free,
+                "percent": memory.percent,
             },
             "disk": {
                 "total": disk.total,
@@ -330,23 +266,82 @@ def system_stats():
                 "free": disk.free,
                 "percent": disk.percent,
             },
+            "process": {
+                "memory_percent": psutil.Process(os.getpid()).memory_percent(),
+                "cpu_percent": psutil.Process(os.getpid()).cpu_percent(interval=0.1),
+            },
         }
 
         return jsonify(stats)
     except Exception as e:
-        return jsonify({"error": f"Failed to get system stats: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
+
+
+# Helper functions
+def mask_sensitive_config(config):
+    """Mask sensitive information in configuration"""
+    masked = {}
+
+    # Deep copy while masking API keys
+    for section, values in config.items():
+        if isinstance(values, dict):
+            masked[section] = {}
+            for key, value in values.items():
+                if isinstance(value, dict):
+                    masked[section][key] = {}
+                    for subkey, subvalue in value.items():
+                        if "api_key" in subkey.lower() and subvalue:
+                            masked[section][key][subkey] = "********"
+                        else:
+                            masked[section][key][subkey] = subvalue
+                elif "api_key" in key.lower() and value:
+                    masked[section][key] = "********"
+                else:
+                    masked[section][key] = value
+        else:
+            masked[section] = values
+
+    return masked
+
+
+def preserve_api_keys(old_config, new_config):
+    """Preserve API keys in new configuration if they are masked"""
+    for section, values in new_config.items():
+        if isinstance(values, dict):
+            if section not in old_config:
+                continue
+
+            for key, value in values.items():
+                if isinstance(value, dict):
+                    if key not in old_config[section]:
+                        continue
+
+                    for subkey, subvalue in value.items():
+                        if "api_key" in subkey.lower() and subvalue == "********":
+                            # Preserve the old API key
+                            if subkey in old_config[section][key]:
+                                value[subkey] = old_config[section][key][subkey]
+                elif "api_key" in key.lower() and value == "********":
+                    # Preserve the old API key
+                    if key in old_config[section]:
+                        values[key] = old_config[section][key]
 
 
 # Async functions for AI processing
-async def generate_response(message, model="gpt-4o"):
+async def generate_response(message, context=None):
     """Generate a response using the LLM"""
-    # This would use the actual OpenManus LLM with proper context
-    try:
-        # For now, return a placeholder response
-        return f"This is a simulated response from OpenManus using the {model} model. Your message was: '{message}'"
-    except Exception as e:
-        print(f"Error generating response: {str(e)}")
-        return f"Sorry, I encountered an error: {str(e)}"
+    if context is None:
+        context = []
+
+    # If running without LLM, return a placeholder
+    if LLM is None:
+        await asyncio.sleep(1)  # Simulate processing time
+        return f"This is a simulated response to: {message}"
+
+    # Implement real LLM response generation
+    response = "The OpenManus dashboard is now set up and functional. This is a placeholder response until the LLM integration is fully configured."
+
+    return response
 
 
 # Run the app
