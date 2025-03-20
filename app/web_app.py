@@ -94,18 +94,18 @@ def get_models():
 
     # If no models found, provide defaults
     if not models:
-    models = [
-        {
-            "id": "gpt-4o",
-            "name": "GPT-4o",
-            "features": ["web_access", "file_upload", "code_execution", "tool_use"],
-        },
-        {
-            "id": "claude-3-opus",
-            "name": "Claude 3 Opus",
-            "features": ["web_access", "file_upload", "code_execution", "tool_use"],
-        },
-    ]
+        models = [
+            {
+                "id": "gpt-4o",
+                "name": "GPT-4o",
+                "features": ["web_access", "file_upload", "code_execution", "tool_use"],
+            },
+            {
+                "id": "claude-3-opus",
+                "name": "Claude 3 Opus",
+                "features": ["web_access", "file_upload", "code_execution", "tool_use"],
+            },
+        ]
 
     return jsonify({"models": models})
 
