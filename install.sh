@@ -345,7 +345,7 @@ find . -name "*.pyd" -delete 2>/dev/null || true
 
 # Install minimal dependencies first
 echo -e "${YELLOW}Installing minimal dependencies...${NC}"
-pip install --no-cache-dir Flask==2.3.3 markupsafe==2.1.3 Werkzeug==2.3.7 Jinja2==3.1.2 click==8.1.7 itsdangerous==2.1.2
+pip install --no-cache-dir Flask==2.3.3 markupsafe==2.1.3 Werkzeug==2.3.7 Jinja2==3.1.2 click==8.1.7 itsdangerous==2.1.2 loguru==0.7.2
 
 # Check disk space again
 SPACE_AFTER_MINIMAL=$(get_available_space)
