@@ -10,10 +10,7 @@ import time
 import gc
 from werkzeug.utils import secure_filename
 import logging
-
-# Import OpenManus components
-from app.llm import LLM
-from app.config import config
+import importlib.util
 
 # Create Flask app
 app = Flask(__name__)
@@ -23,11 +20,37 @@ app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # Limit uploads to 10MB
 # Thread pool for running async code
 executor = ThreadPoolExecutor(max_workers=4)
 
+# Load config
+try:
+    from app.config import config
+except ImportError:
+    # Fallback config if module not available
+    config = {
+        "system": {
+            "max_tokens_limit": 8192,
+            "max_concurrent_requests": 2,
+            "lightweight_mode": False,
+        },
+        "llm": {"model": "gpt-4o", "temperature": 0.7},
+        "web": {"port": 5000, "debug": False},
+    }
+
 # Configure memory management
 memory_limit = int(config.get("system", {}).get("max_tokens_limit", 8192))
 max_concurrent = int(config.get("system", {}).get("max_concurrent_requests", 2))
+lightweight_mode = config.get("system", {}).get("lightweight_mode", False)
 last_gc_time = time.time()
 active_requests = 0
+
+
+# Helper function to check if a module can be imported
+def is_module_available(module_name):
+    """Check if a module can be imported without actually importing it"""
+    try:
+        spec = importlib.util.find_spec(module_name)
+        return spec is not None
+    except ModuleNotFoundError:
+        return False
 
 
 # Set up request limiter
@@ -57,14 +80,22 @@ def after_request(response):
     return response
 
 
-# Initialize LLM
+# Initialize LLM lazily
 llm = None
 
 
 def init_llm():
     global llm
     if llm is None:
-        llm = LLM()
+        try:
+            # Only import LLM if needed
+            from app.llm import LLM
+
+            llm = LLM()
+        except ImportError as e:
+            logging.warning(f"Could not initialize LLM: {str(e)}")
+            return None
+    return llm
 
 
 # Routes
@@ -88,6 +119,27 @@ def chat():
         message = data.get("message", "")
         context = data.get("context", [])
 
+        # Check if LLM is available
+        if not is_module_available("tiktoken") or not is_module_available("openai"):
+            return jsonify(
+                {
+                    "response": "AI features are not available in lightweight mode. Install AI dependencies with './manage_deps.sh install-ai'",
+                    "status": "warning",
+                }
+            )
+
+        # Initialize LLM lazily
+        if init_llm() is None:
+            return (
+                jsonify(
+                    {
+                        "response": "Failed to initialize LLM. Please check your installation and dependencies.",
+                        "status": "error",
+                    }
+                ),
+                500,
+            )
+
         # Generate a response (implement proper async handling)
         response = generate_response(message, context)
 
@@ -101,6 +153,22 @@ def chat():
 @app.route("/api/models", methods=["GET"])
 def get_models():
     """API endpoint to get available models"""
+    # Check if we're in lightweight mode
+    if lightweight_mode or not is_module_available("openai"):
+        return jsonify(
+            {
+                "models": [
+                    {
+                        "id": "lightweight-mode",
+                        "name": "Lightweight Mode (AI disabled)",
+                        "features": ["web_access", "file_upload", "code_execution"],
+                        "disabled": True,
+                    }
+                ],
+                "status": "lightweight_mode",
+            }
+        )
+
     # Get actual models from config
     models = []
 
@@ -158,6 +226,17 @@ def get_tools():
             "description": "Execute terminal commands",
         },
     ]
+
+    # Don't offer AI features in lightweight mode
+    if not lightweight_mode and is_module_available("openai"):
+        tools.append(
+            {
+                "id": "ai_completion",
+                "name": "AI Completion",
+                "description": "Generate text with AI models",
+            }
+        )
+
     return jsonify({"tools": tools})
 
 
@@ -195,6 +274,7 @@ def settings():
             "temperature": config.get("llm", {}).get("temperature", 0.7),
             "save_conversations": True,
             "max_history": 100,
+            "lightweight_mode": lightweight_mode,
         }
         return jsonify({"settings": user_settings})
     else:
@@ -270,10 +350,60 @@ def system_stats():
                 "memory_percent": psutil.Process(os.getpid()).memory_percent(),
                 "cpu_percent": psutil.Process(os.getpid()).cpu_percent(interval=0.1),
             },
+            "system": {
+                "lightweight_mode": lightweight_mode,
+                "time": time.time(),
+                "uptime": (
+                    time.time() - psutil.boot_time()
+                    if hasattr(psutil, "boot_time")
+                    else 0
+                ),
+            },
         }
 
         return jsonify(stats)
     except Exception as e:
+        logging.error(f"Error in system stats API: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/system/dependencies", methods=["GET"])
+def system_dependencies():
+    """API endpoint for checking system dependencies"""
+    try:
+        # Check for critical dependencies
+        dependencies = {
+            "flask": True,  # We're running, so Flask is available
+            "psutil": True,  # We're using it for stats
+            "openai": is_module_available("openai"),
+            "tiktoken": is_module_available("tiktoken"),
+            "numpy": is_module_available("numpy"),
+            "torch": is_module_available("torch"),
+        }
+
+        # Get installed package versions where possible
+        versions = {}
+        try:
+            import pkg_resources
+
+            for pkg in dependencies.keys():
+                try:
+                    versions[pkg] = pkg_resources.get_distribution(pkg).version
+                except pkg_resources.DistributionNotFound:
+                    versions[pkg] = None
+        except ImportError:
+            # pkg_resources not available
+            pass
+
+        return jsonify(
+            {
+                "dependencies": dependencies,
+                "versions": versions,
+                "lightweight_mode": lightweight_mode,
+            }
+        )
+    except Exception as e:
+        logging.error(f"Error in dependencies API: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -333,8 +463,13 @@ async def generate_response(message, context=None):
     if context is None:
         context = []
 
+    # Check if we're in lightweight mode
+    if lightweight_mode:
+        await asyncio.sleep(0.5)  # Simulate processing time
+        return "AI features are disabled in lightweight mode. Install AI dependencies with './manage_deps.sh install-ai'"
+
     # If running without LLM, return a placeholder
-    if LLM is None:
+    if init_llm() is None:
         await asyncio.sleep(1)  # Simulate processing time
         return f"This is a simulated response to: {message}"
 
@@ -346,4 +481,25 @@ async def generate_response(message, context=None):
 
 # Run the app
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    port = int(config.get("web", {}).get("port", 5000))
+    debug = bool(config.get("web", {}).get("debug", False))
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    # Check if we're in lightweight mode
+    if lightweight_mode:
+        logging.info("Running in lightweight mode - AI features disabled")
+
+    # Check for missing dependencies
+    if not is_module_available("openai") or not is_module_available("tiktoken"):
+        logging.warning(
+            "AI dependencies missing. Run './manage_deps.sh install-ai' to enable AI features."
+        )
+
+    try:
+        app.run(debug=debug, host="0.0.0.0", port=port)
+    except Exception as e:
+        logging.error(f"Error starting server: {str(e)}")

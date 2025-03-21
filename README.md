@@ -37,9 +37,20 @@ We're also excited to introduce [OpenManus-RL](https://github.com/OpenManus/Open
 - **System Resource Monitoring**: Real-time CPU, RAM, and disk usage visualization
 - **Tool Integration**: Access to all OpenManus tools and capabilities through a user-friendly interface
 
+## System Requirements
+
+- **Disk Space**:
+  - Standard installation: Minimum 1.5GB free space (recommended 2GB+)
+  - Lightweight installation: Minimum 500MB free space
+- **Memory**: 1GB RAM minimum (2GB+ recommended)
+- **Python**: Version 3.8 or higher
+- **Operating System**: Linux, macOS, or Windows
+
 ## Installation
 
-### Method 1: One-Line Installation (Recommended)
+We offer multiple installation methods to suit different system constraints:
+
+### Method 1: One-Line Installation
 
 For the quickest installation experience, you can use our one-line wget command:
 
@@ -50,16 +61,25 @@ wget https://raw.githubusercontent.com/mhm22332/openmanusguiplus/main/install.sh
 # Make it executable
 chmod +x install-openmanus.sh
 
-# Run the installer (optionally specify an installation directory)
+# Run the installer (standard mode)
 ./install-openmanus.sh [/path/to/install/directory]
+
+# OR run in lightweight mode (for limited disk space)
+./install-openmanus.sh --lightweight [/path/to/install/directory]
 ```
 
-This will automatically:
+#### Installation Options
+
+- `--lightweight` or `-l`: Install with minimal dependencies (no ML libraries)
+- `--dir <path>` or `-d <path>`: Specify installation directory
+
+The installer will automatically:
+- Check available disk space and recommend lightweight mode if needed
 - Clone the repository
 - Set up a Python virtual environment
-- Install all dependencies with memory optimizations
+- Install dependencies optimized for your system resources
 - Configure basic settings
-- Create an optimized startup script
+- Create startup and dependency management scripts
 
 ### Method 2: Manual Installation
 
@@ -79,19 +99,18 @@ source .venv/bin/activate  # On Linux/Mac
 
 3. Install the required dependencies:
 ```bash
+# For full installation (requires ~1.5GB disk space)
 pip install -r requirements.txt
-```
 
-If you encounter any issues with dependencies, you can install the core web UI requirements separately:
-```bash
-pip install flask flask-socketio flask-cors psutil tomli tomli_w tiktoken openai
+# For lightweight installation (minimal dependencies)
+pip install flask flask-socketio flask-cors psutil tomli tomli_w
 ```
 
 ## Running the Dashboard
 
 ### Using the Optimized Startup Script (Recommended)
 
-If you used the one-line installer, an optimized startup script was created for you:
+If you used the installer, an optimized startup script was created for you:
 
 ```bash
 cd openmanusguiplus
@@ -108,6 +127,27 @@ source .venv/bin/activate  # On Linux/Mac
 # OR
 .venv\Scripts\activate  # On Windows
 python run_web_app.py
+```
+
+## Managing Dependencies
+
+The installer creates a dependency management script to help with maintaining your installation:
+
+```bash
+# Show available commands
+./manage_deps.sh
+
+# Install AI dependencies after lightweight installation
+./manage_deps.sh install-ai
+
+# Install all dependencies
+./manage_deps.sh install-full
+
+# Clean pip cache to free disk space
+./manage_deps.sh clean-cache
+
+# Check installed dependencies
+./manage_deps.sh check
 ```
 
 ## Memory Management Features
@@ -127,6 +167,7 @@ To configure memory settings, edit the `config/config.toml` file:
 # Lower these values on low-memory systems
 max_tokens_limit = 8192  # Maximum token context size
 max_concurrent_requests = 2  # Maximum concurrent API requests
+lightweight_mode = false  # Set to true to disable advanced features
 ```
 
 ## Dashboard Components
@@ -157,6 +198,15 @@ Access and configure all OpenManus tools:
 - Code execution
 - File operations
 - Custom integrations
+
+## Troubleshooting
+
+### Common Installation Issues
+
+- **"No space left on device" error**: Use the lightweight installation option with `--lightweight` flag
+- **Missing dependencies**: Run `./manage_deps.sh install-ai` to add specific dependencies after installation
+- **Import errors when running**: Check which packages are missing and install them individually
+- **High memory usage**: Edit the `config/config.toml` file to lower `max_concurrent_requests` and `max_tokens_limit`
 
 ## Contributing
 
