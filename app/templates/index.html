@@ -538,188 +538,46 @@ await browser.input_text(index=2, text="Hello, OpenManus!")</code></pre>
     </div>
 
     <!-- Configuration Modal -->
-    <div class="modal" id="config-modal">
-        <div class="modal-content modal-lg">
-            <div class="modal-header">
-                <h2>OpenManus Configuration</h2>
-                <button class="btn btn-transparent btn-sm close-modal"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <div class="tabs">
-                    <button class="tab-btn active" data-tab="llm-config">LLM Models</button>
-                    <button class="tab-btn" data-tab="browser-config">Browser</button>
-                    <button class="tab-btn" data-tab="search-config">Search</button>
-                    <button class="tab-btn" data-tab="sandbox-config">Sandbox</button>
+    <div id="config-modal" class="modal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">OpenManus Configuration</h3>
+                    <button type="button" class="close-modal">&times;</button>
                 </div>
-
-                <div class="tab-content active" id="llm-config-tab">
-                    <div class="config-actions">
-                        <button class="btn btn-sm btn-primary" id="add-model-btn">
-                            <i class="fas fa-plus"></i> Add Model
-                        </button>
+                <div class="modal-body">
+                    <div class="config-tabs">
+                        <div class="config-tab active" data-tab="llm-tab">LLM</div>
+                        <div class="config-tab" data-tab="system-tab">System</div>
+                        <div class="config-tab" data-tab="ui-tab">UI</div>
                     </div>
 
-                    <div class="model-list" id="model-list">
-                        <!-- Model entries will be dynamically added here -->
-                    </div>
-
-                    <!-- Model template for adding new models -->
-                    <template id="model-template">
-                        <div class="model-entry">
-                            <div class="model-header">
-                                <h4 class="model-name">Model Name</h4>
-                                <div class="model-actions">
-                                    <button class="btn btn-transparent btn-sm model-edit">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-transparent btn-sm model-delete">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="model-body">
-                                <div class="model-field">
-                                    <label>Model Type</label>
-                                    <input type="text" class="model-type" placeholder="e.g., gpt-4o">
-                                </div>
-                                <div class="model-field">
-                                    <label>Base URL</label>
-                                    <input type="text" class="model-base-url" placeholder="https://api.openai.com/v1">
-                                </div>
-                                <div class="model-field">
-                                    <label>API Key</label>
-                                    <div class="api-key-input">
-                                        <input type="password" class="model-api-key" placeholder="Enter API key">
-                                        <button class="btn btn-transparent btn-sm toggle-password">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="model-field">
-                                    <label>Temperature</label>
-                                    <input type="range" class="model-temperature" min="0" max="1" step="0.1"
-                                        value="0.7">
-                                    <span class="temperature-value">0.7</span>
-                                </div>
-                                <div class="model-field">
-                                    <label>Max Tokens</label>
-                                    <input type="number" class="model-max-tokens" min="100" max="32000" step="100"
-                                        value="4000">
-                                </div>
-                                <div class="model-field">
-                                    <label>API Type</label>
-                                    <select class="model-api-type">
-                                        <option value="openai">OpenAI</option>
-                                        <option value="azure">Azure</option>
-                                        <option value="anthropic">Anthropic</option>
-                                        <option value="ollama">Ollama</option>
-                                    </select>
-                                </div>
+                    <form id="configuration-form">
+                        <!-- LLM Configuration Tab -->
+                        <div id="llm-tab" class="config-tab-content" style="display: block;">
+                            <div id="llm-config"></div>
+                            <div class="text-center mt-3">
+                                <button id="add-model-btn" type="button" class="btn btn-outline-primary">
+                                    <i class="fas fa-plus"></i> Add Model
+                                </button>
                             </div>
                         </div>
-                    </template>
-                </div>
 
-                <div class="tab-content" id="browser-config-tab">
-                    <div class="browser-config">
-                        <div class="config-item">
-                            <label>Headless Mode</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="browser-headless">
-                                <span class="toggle-slider"></span>
-                            </label>
+                        <!-- System Configuration Tab -->
+                        <div id="system-tab" class="config-tab-content" style="display: none;">
+                            <div id="system-config"></div>
                         </div>
-                        <div class="config-item">
-                            <label>Disable Security</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="browser-disable-security">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="config-item">
-                            <label>Max Content Length</label>
-                            <input type="number" id="browser-max-content" min="500" max="10000" step="100" value="2000">
-                        </div>
-                        <div class="config-item">
-                            <label>Chrome Instance Path (optional)</label>
-                            <input type="text" id="browser-chrome-path" placeholder="Path to Chrome executable">
-                        </div>
-                    </div>
-                </div>
 
-                <div class="tab-content" id="search-config-tab">
-                    <div class="search-config">
-                        <div class="config-item">
-                            <label>Default Search Engine</label>
-                            <select id="search-engine">
-                                <option value="Google">Google</option>
-                                <option value="DuckDuckGo">DuckDuckGo</option>
-                                <option value="Baidu">Baidu</option>
-                                <option value="Bing">Bing</option>
-                            </select>
+                        <!-- UI Configuration Tab -->
+                        <div id="ui-tab" class="config-tab-content" style="display: none;">
+                            <div id="ui-config"></div>
                         </div>
-                        <div class="config-item">
-                            <label>Fallback Search Engines</label>
-                            <div class="checkbox-group">
-                                <label><input type="checkbox" value="Google"> Google</label>
-                                <label><input type="checkbox" value="DuckDuckGo" checked> DuckDuckGo</label>
-                                <label><input type="checkbox" value="Baidu" checked> Baidu</label>
-                                <label><input type="checkbox" value="Bing"> Bing</label>
-                            </div>
-                        </div>
-                        <div class="config-item">
-                            <label>Retry Delay (seconds)</label>
-                            <input type="number" id="search-retry-delay" min="10" max="300" step="10" value="60">
-                        </div>
-                        <div class="config-item">
-                            <label>Max Retries</label>
-                            <input type="number" id="search-max-retries" min="1" max="10" step="1" value="3">
-                        </div>
-                    </div>
+                    </form>
                 </div>
-
-                <div class="tab-content" id="sandbox-config-tab">
-                    <div class="sandbox-config">
-                        <div class="config-item">
-                            <label>Use Sandbox</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="sandbox-use">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="config-item">
-                            <label>Docker Image</label>
-                            <input type="text" id="sandbox-image" value="python:3.12-slim">
-                        </div>
-                        <div class="config-item">
-                            <label>Working Directory</label>
-                            <input type="text" id="sandbox-work-dir" value="/workspace">
-                        </div>
-                        <div class="config-item">
-                            <label>Memory Limit</label>
-                            <input type="text" id="sandbox-memory" value="512m">
-                        </div>
-                        <div class="config-item">
-                            <label>CPU Limit</label>
-                            <input type="number" id="sandbox-cpu" min="0.1" max="4.0" step="0.1" value="1.0">
-                        </div>
-                        <div class="config-item">
-                            <label>Command Timeout (seconds)</label>
-                            <input type="number" id="sandbox-timeout" min="30" max="900" step="30" value="300">
-                        </div>
-                        <div class="config-item">
-                            <label>Network Enabled</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="sandbox-network">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                    <button id="save-config" type="button" class="btn btn-primary">Save Configuration</button>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline-secondary close-modal">Cancel</button>
-                <button class="btn btn-primary" id="save-config">Save Configuration</button>
             </div>
         </div>
     </div>

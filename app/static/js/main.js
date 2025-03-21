@@ -127,21 +127,68 @@ function handleSendMessage() {
     userInput.value = '';
     userInput.style.height = 'auto';
 
-    // Send to the AI and display thinking indicator
+    // Show thinking indicator
     showThinkingIndicator();
 
-    // Simulate AI response after a brief delay (would be replaced with actual API call)
-    setTimeout(() => {
-        // Remove thinking indicator
-        removeThinkingIndicator();
+    // Get selected model (if any)
+    const modelSelector = document.getElementById('model-selector');
+    const modelId = modelSelector ? modelSelector.value : 'default';
 
-        // Simulate AI response
-        const aiResponse = "I've received your message. In a real implementation, this would be processed by the OpenManus AI backend.";
-        addAIMessage(aiResponse);
+    // Get current context from context panel
+    const contextItems = document.querySelectorAll('.context-item');
+    let context = [];
+    contextItems.forEach(item => {
+        const type = item.getAttribute('data-type');
+        const text = item.querySelector('span').textContent;
+        context.push({ type, text });
+    });
 
-        // Scroll to bottom of conversation
-        scrollConversationToBottom();
-    }, 1500);
+    // Prepare the request
+    const requestData = {
+        message: message,
+        model: modelId,
+        context: []  // We'll populate this later with proper conversation history
+    };
+
+    // Send to API
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Remove thinking indicator
+            removeThinkingIndicator();
+
+            // Check for success
+            if (data.status === 'success') {
+                // Add AI response to conversation
+                addAIMessage(data.response);
+            } else {
+                // Handle error or warning response
+                const message = data.response || data.error || 'Unknown error occurred';
+                addAIMessage(`Error: ${message}`);
+                showToast(message, data.status || 'error');
+            }
+
+            // Scroll to bottom of conversation
+            scrollConversationToBottom();
+        })
+        .catch(error => {
+            console.error('Error calling chat API:', error);
+            removeThinkingIndicator();
+            addAIMessage(`I encountered an error processing your request: ${error.message}`);
+            showToast(`Error: ${error.message}`, 'error');
+            scrollConversationToBottom();
+        });
 }
 
 // Add a user message to the conversation
@@ -579,18 +626,47 @@ function toggleToolsSidebar() {
     }
 }
 
-// Open settings modal
+// Open settings modal - fixed to use standard DOM methods rather than Bootstrap
 function openSettingsModal() {
     const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) {
         settingsModal.classList.add('visible');
+        // If this is actually a Bootstrap modal and Bootstrap is available
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            try {
+                const modal = new bootstrap.Modal(settingsModal);
+                modal.show();
+            } catch (e) {
+                console.warn('Bootstrap modal initialization failed, using fallback', e);
+                settingsModal.style.display = 'block';
+            }
+        } else {
+            // Fallback for non-Bootstrap
+            settingsModal.style.display = 'block';
+        }
     }
 }
 
-// Close the currently open modal
+// Close the currently open modal - with fallbacks for different modal systems
 function closeModal() {
-    document.querySelectorAll('.modal.visible').forEach(modal => {
+    document.querySelectorAll('.modal.visible, .modal.active, .modal.show').forEach(modal => {
         modal.classList.remove('visible');
+        modal.classList.remove('active');
+        modal.classList.remove('show');
+
+        // If this is a Bootstrap modal and Bootstrap is available
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            try {
+                const bsModal = bootstrap.Modal.getInstance(modal);
+                if (bsModal) bsModal.hide();
+            } catch (e) {
+                console.warn('Bootstrap modal hide failed, using fallback', e);
+                modal.style.display = 'none';
+            }
+        } else {
+            // Fallback for non-Bootstrap
+            modal.style.display = 'none';
+        }
     });
 }
 
@@ -960,33 +1036,65 @@ function formatBytes(bytes, decimals = 2) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
-// Configuration Management
+// Replace or enhance the existing initConfigurationManager to ensure modals work
 function initConfigurationManager() {
-    // Initialize the configuration manager functionality
+    // Get references to key elements
+    const configButton = document.querySelector('.config-button, [data-modal="config-modal"], .sidebar-nav a i.fa-cog, .sidebar-nav a i.fa-gear');
+    const configModal = document.getElementById('config-modal');
     const configForm = document.getElementById('configuration-form');
     const saveConfigBtn = document.getElementById('save-config');
     const addModelBtn = document.getElementById('add-model-btn');
+    const closeButtons = document.querySelectorAll('.close-modal, .modal .close, .modal .btn-close');
 
-    if (configForm) {
-        // Load configuration when form is shown
-        const configModal = document.getElementById('config-modal');
-        configModal.addEventListener('show.bs.modal', function () {
-            loadConfiguration();
+    // Add click handler to configuration button/icon
+    if (configButton) {
+        configButton.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (configModal) {
+                configModal.style.display = 'block';
+                configModal.classList.add('visible');
+                loadConfiguration();
+            }
         });
+    }
 
-        // Add event listeners
+    // Add close handlers to all close buttons
+    closeButtons.forEach(button => {
+        button.addEventListener('click', function (e) {
+            e.preventDefault();
+            closeModal();
+        });
+    });
+
+    // Make sure clicking outside modal closes it
+    window.addEventListener('click', function (e) {
+        if (e.target.classList.contains('modal')) {
+            closeModal();
+        }
+    });
+
+    // Set up form handlers
+    if (configForm) {
+        // Add event listeners for form elements
         if (saveConfigBtn) {
-            saveConfigBtn.addEventListener('click', saveConfiguration);
+            saveConfigBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                saveConfiguration();
+            });
         }
 
         if (addModelBtn) {
-            addModelBtn.addEventListener('click', addNewModel);
+            addModelBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                addNewModel();
+            });
         }
 
         // Setup tab switching
         const configTabs = document.querySelectorAll('.config-tab');
         configTabs.forEach(tab => {
-            tab.addEventListener('click', function () {
+            tab.addEventListener('click', function (e) {
+                e.preventDefault();
                 const tabId = this.getAttribute('data-tab');
                 switchConfigTab(tabId);
             });
@@ -1245,10 +1353,13 @@ function switchConfigTab(tabId) {
     }
 }
 
-// Save configuration
+// Save configuration with more robust error handling
 function saveConfiguration() {
     const configForm = document.getElementById('configuration-form');
-    if (!configForm) return;
+    if (!configForm) {
+        showToast('Configuration form not found', 'error');
+        return;
+    }
 
     // Show saving message
     showToast('Saving configuration...', 'info');
@@ -1302,7 +1413,7 @@ function saveConfiguration() {
     })
         .then(response => {
             if (!response.ok) {
-                throw new Error('Failed to save configuration');
+                throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
             }
             return response.json();
         })
@@ -1310,9 +1421,13 @@ function saveConfiguration() {
             if (data.success) {
                 showToast('Configuration saved successfully', 'success');
 
-                // Close modal after saving
-                const configModal = document.getElementById('config-modal');
-                bootstrap.Modal.getInstance(configModal).hide();
+                // Close modal using our more robust method
+                closeModal();
+
+                // Reload the page to apply settings
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
             } else {
                 showToast('Error: ' + (data.error || 'Unknown error'), 'error');
             }
