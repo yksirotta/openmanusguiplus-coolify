@@ -85,9 +85,9 @@ rm -rf .git/objects/pack/* .git/objects/info/* .git/refs/remotes/ .git/logs/ .gi
 echo -e "${YELLOW}Creating Python virtual environment...${NC}"
 $PY_CMD -m venv .venv || handle_error "Failed to create virtual environment"
 
-# Activate virtual environment
+    # Activate virtual environment
 ACTIVATE_SCRIPT=".venv/bin/activate"
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
     ACTIVATE_SCRIPT=".venv/Scripts/activate"
 fi
 
@@ -345,7 +345,7 @@ find . -name "*.pyd" -delete 2>/dev/null || true
 
 # Install minimal dependencies first
 echo -e "${YELLOW}Installing minimal dependencies...${NC}"
-pip install --no-cache-dir Flask==2.3.3 markupsafe==2.1.3 Werkzeug==2.3.7 Jinja2==3.1.2 click==8.1.7 itsdangerous==2.1.2 loguru==0.7.2
+pip install --no-cache-dir Flask==2.3.3 markupsafe==2.1.3 Werkzeug==2.3.7 Jinja2==3.1.2 click==8.1.7 itsdangerous==2.1.2 loguru==0.7.2 pydantic==2.5.2
 
 # Check disk space again
 SPACE_AFTER_MINIMAL=$(get_available_space)

@@ -26,6 +26,10 @@ echo -e "${YELLOW}Installing missing dependencies...${NC}"
 echo -e "${BLUE}Installing loguru...${NC}"
 pip install --no-cache-dir loguru==0.7.2 || { echo -e "${RED}Failed to install loguru${NC}"; exit 1; }
 
+# Install pydantic for data validation
+echo -e "${BLUE}Installing pydantic...${NC}"
+pip install --no-cache-dir pydantic==2.5.2 || { echo -e "${RED}Failed to install pydantic${NC}"; exit 1; }
+
 # Fix Flask and related dependencies
 echo -e "${BLUE}Ensuring Flask dependencies are installed...${NC}"
 pip install --no-cache-dir Flask==2.3.3 markupsafe==2.1.3 Werkzeug==2.3.7 Jinja2==3.1.2 click==8.1.7 itsdangerous==2.1.2 || { echo -e "${RED}Failed to install Flask dependencies${NC}"; exit 1; }
@@ -33,6 +37,7 @@ pip install --no-cache-dir Flask==2.3.3 markupsafe==2.1.3 Werkzeug==2.3.7 Jinja2
 # Verify installation
 echo -e "${YELLOW}Verifying installation...${NC}"
 python -c "from loguru import logger; print('Loguru successfully installed!')" || { echo -e "${RED}Loguru verification failed${NC}"; exit 1; }
+python -c "import pydantic; print(f'Pydantic version: {pydantic.__version__}')" || { echo -e "${RED}Pydantic verification failed${NC}"; exit 1; }
 python -c "import flask; print(f'Flask version: {flask.__version__}')" || { echo -e "${RED}Flask verification failed${NC}"; exit 1; }
 
 echo -e "${GREEN}All dependencies successfully installed!${NC}"
