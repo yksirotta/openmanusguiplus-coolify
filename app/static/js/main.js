@@ -962,305 +962,365 @@ function formatBytes(bytes, decimals = 2) {
 
 // Configuration Management
 function initConfigurationManager() {
-    // Load configuration when the modal is opened
-    document.querySelectorAll('[data-modal="config-modal"]').forEach(trigger => {
-        trigger.addEventListener('click', loadConfiguration);
-    });
+    // Initialize the configuration manager functionality
+    const configForm = document.getElementById('configuration-form');
+    const saveConfigBtn = document.getElementById('save-config');
+    const addModelBtn = document.getElementById('add-model-btn');
 
-    // Set up tab switching in configuration modal
-    document.querySelectorAll('#config-modal .tab-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            // Hide all tab contents
-            document.querySelectorAll('#config-modal .tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-
-            // Deactivate all tab buttons
-            document.querySelectorAll('#config-modal .tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-
-            // Activate clicked tab
-            this.classList.add('active');
-            const tabId = this.dataset.tab + '-tab';
-            document.getElementById(tabId).classList.add('active');
+    if (configForm) {
+        // Load configuration when form is shown
+        const configModal = document.getElementById('config-modal');
+        configModal.addEventListener('show.bs.modal', function () {
+            loadConfiguration();
         });
-    });
 
-    // Set up add model button
-    document.getElementById('add-model-btn')?.addEventListener('click', addNewModel);
+        // Add event listeners
+        if (saveConfigBtn) {
+            saveConfigBtn.addEventListener('click', saveConfiguration);
+        }
 
-    // Set up save configuration button
-    document.getElementById('save-config')?.addEventListener('click', saveConfiguration);
+        if (addModelBtn) {
+            addModelBtn.addEventListener('click', addNewModel);
+        }
+
+        // Setup tab switching
+        const configTabs = document.querySelectorAll('.config-tab');
+        configTabs.forEach(tab => {
+            tab.addEventListener('click', function () {
+                const tabId = this.getAttribute('data-tab');
+                switchConfigTab(tabId);
+            });
+        });
+    }
 }
 
-// Load configuration data from the server
+// Load configuration from the server
 function loadConfiguration() {
+    showToast('Loading configuration...', 'info');
+
     fetch('/api/config')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to load configuration');
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.config) {
+            if (data.success) {
                 populateConfigurationForm(data.config);
+                showToast('Configuration loaded successfully', 'success');
+            } else {
+                showToast('Error: ' + (data.error || 'Unknown error'), 'error');
             }
         })
-        .catch(error => console.error('Error loading configuration:', error));
+        .catch(error => {
+            console.error('Error loading configuration:', error);
+            showToast('Failed to load configuration: ' + error.message, 'error');
+        });
 }
 
-// Populate the configuration form with data
+// Populate the configuration form with loaded data
 function populateConfigurationForm(config) {
-    // Clear existing model list
-    const modelList = document.getElementById('model-list');
-    if (modelList) {
-        modelList.innerHTML = '';
+    // Clear existing content
+    const llmSection = document.getElementById('llm-config');
+    const systemSection = document.getElementById('system-config');
+    const uiSection = document.getElementById('ui-config');
 
-        // If LLM configuration exists, add each model
-        if (config.llm) {
-            for (const [name, settings] of Object.entries(config.llm)) {
-                if (typeof settings === 'object' && name !== 'default') {
-                    addModelToList(name, settings);
+    if (llmSection) llmSection.innerHTML = '';
+    if (systemSection) systemSection.innerHTML = '';
+    if (uiSection) uiSection.innerHTML = '';
+
+    // Populate LLM section
+    if (llmSection && config.llm) {
+        // Handle global LLM settings
+        let globalHtml = `
+            <div class="config-group">
+                <h4>Global LLM Settings</h4>
+                <div class="mb-3">
+                    <label for="llm-default-model" class="form-label">Default Model</label>
+                    <input type="text" class="form-control" id="llm-default-model" name="llm.model"
+                        value="${config.llm.model || ''}">
+                </div>
+                <div class="mb-3">
+                    <label for="llm-temperature" class="form-label">Temperature</label>
+                    <input type="number" class="form-control" id="llm-temperature" name="llm.temperature"
+                        min="0" max="2" step="0.1" value="${config.llm.temperature || 0.7}">
+                </div>
+                <div class="mb-3">
+                    <label for="llm-api-key" class="form-label">API Key</label>
+                    <input type="password" class="form-control" id="llm-api-key" name="llm.api_key"
+                        value="${config.llm.api_key || ''}">
+                </div>
+            </div>
+        `;
+
+        llmSection.innerHTML = globalHtml;
+
+        // Add models
+        const modelKeys = Object.keys(config.llm).filter(key =>
+            typeof config.llm[key] === 'object' && config.llm[key] !== null);
+
+        if (modelKeys.length > 0) {
+            let modelsHtml = '<div class="models-container"><h4>Custom Models</h4>';
+
+            modelKeys.forEach(modelKey => {
+                const model = config.llm[modelKey];
+                if (model && typeof model === 'object') {
+                    modelsHtml += createModelCard(modelKey, model);
                 }
-            }
+            });
+
+            modelsHtml += '</div>';
+            llmSection.innerHTML += modelsHtml;
         }
     }
 
-    // Populate browser settings
-    if (config.browser) {
-        document.getElementById('browser-headless').checked = config.browser.headless || false;
-        document.getElementById('browser-disable-security').checked = config.browser.disable_security || false;
-        document.getElementById('browser-max-content').value = config.browser.max_content_length || 2000;
-        document.getElementById('browser-chrome-path').value = config.browser.chrome_instance_path || '';
+    // Populate System section
+    if (systemSection && config.system) {
+        let systemHtml = `
+            <div class="config-group">
+                <h4>System Settings</h4>
+                <div class="mb-3">
+                    <label for="system-max-tokens" class="form-label">Max Tokens Limit</label>
+                    <input type="number" class="form-control" id="system-max-tokens" name="system.max_tokens_limit"
+                        value="${config.system.max_tokens_limit || 8192}">
+                </div>
+                <div class="mb-3">
+                    <label for="system-concurrent" class="form-label">Max Concurrent Requests</label>
+                    <input type="number" class="form-control" id="system-concurrent" name="system.max_concurrent_requests"
+                        min="1" max="10" value="${config.system.max_concurrent_requests || 2}">
+                </div>
+                <div class="form-check mb-3">
+                    <input type="checkbox" class="form-check-input" id="system-lightweight" name="system.lightweight_mode"
+                        ${config.system.lightweight_mode ? 'checked' : ''}>
+                    <label class="form-check-label" for="system-lightweight">Lightweight Mode (disable AI)</label>
+                </div>
+            </div>
+        `;
+
+        systemSection.innerHTML = systemHtml;
     }
 
-    // Populate search settings
-    if (config.search) {
-        document.getElementById('search-engine').value = config.search.engine || 'Google';
-        document.getElementById('search-retry-delay').value = config.search.retry_delay || 60;
-        document.getElementById('search-max-retries').value = config.search.max_retries || 3;
+    // Populate UI section
+    if (uiSection && config.web) {
+        let uiHtml = `
+            <div class="config-group">
+                <h4>UI Settings</h4>
+                <div class="mb-3">
+                    <label for="web-port" class="form-label">Web Port</label>
+                    <input type="number" class="form-control" id="web-port" name="web.port"
+                        min="1024" max="65535" value="${config.web.port || 5000}">
+                </div>
+                <div class="mb-3">
+                    <label for="web-theme" class="form-label">Default Theme</label>
+                    <select class="form-control" id="web-theme" name="web.theme">
+                        <option value="dark" ${(config.web.theme === 'dark') ? 'selected' : ''}>Dark</option>
+                        <option value="light" ${(config.web.theme === 'light') ? 'selected' : ''}>Light</option>
+                    </select>
+                </div>
+                <div class="form-check mb-3">
+                    <input type="checkbox" class="form-check-input" id="web-debug" name="web.debug"
+                        ${config.web.debug ? 'checked' : ''}>
+                    <label class="form-check-label" for="web-debug">Debug Mode</label>
+                </div>
+                <div class="form-check mb-3">
+                    <input type="checkbox" class="form-check-input" id="web-save-conversations" name="web.save_conversations"
+                        ${config.web.save_conversations ? 'checked' : ''}>
+                    <label class="form-check-label" for="web-save-conversations">Save Conversations</label>
+                </div>
+                <div class="mb-3">
+                    <label for="web-max-history" class="form-label">Max History Items</label>
+                    <input type="number" class="form-control" id="web-max-history" name="web.max_history"
+                        min="10" max="1000" value="${config.web.max_history || 100}">
+                </div>
+            </div>
+        `;
 
-        // Set fallback engines
-        const fallbacks = config.search.fallback_engines || [];
-        document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(checkbox => {
-            checkbox.checked = fallbacks.includes(checkbox.value);
-        });
-    }
-
-    // Populate sandbox settings
-    if (config.sandbox) {
-        document.getElementById('sandbox-use').checked = config.sandbox.use_sandbox || false;
-        document.getElementById('sandbox-image').value = config.sandbox.image || 'python:3.12-slim';
-        document.getElementById('sandbox-work-dir').value = config.sandbox.work_dir || '/workspace';
-        document.getElementById('sandbox-memory').value = config.sandbox.memory_limit || '512m';
-        document.getElementById('sandbox-cpu').value = config.sandbox.cpu_limit || 1.0;
-        document.getElementById('sandbox-timeout').value = config.sandbox.timeout || 300;
-        document.getElementById('sandbox-network').checked = config.sandbox.network_enabled || false;
+        uiSection.innerHTML = uiHtml;
     }
 }
 
-// Add a new model to the configuration
+// Create HTML for a model card
+function createModelCard(modelId, settings) {
+    return `
+        <div class="card mb-3 model-card" data-model-id="${modelId}">
+            <div class="card-header d-flex justify-content-between">
+                <span>${settings.model || modelId}</span>
+                <button type="button" class="btn-close" aria-label="Remove"
+                    onclick="removeModel('${modelId}')"></button>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label">Model Name</label>
+                    <input type="text" class="form-control" name="llm.${modelId}.model" value="${settings.model || ''}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Base URL</label>
+                    <input type="text" class="form-control" name="llm.${modelId}.base_url" value="${settings.base_url || ''}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">API Type</label>
+                    <select class="form-control" name="llm.${modelId}.api_type">
+                        <option value="openai" ${settings.api_type === 'openai' ? 'selected' : ''}>OpenAI</option>
+                        <option value="azure" ${settings.api_type === 'azure' ? 'selected' : ''}>Azure</option>
+                        <option value="anthropic" ${settings.api_type === 'anthropic' ? 'selected' : ''}>Anthropic</option>
+                        <option value="mistral" ${settings.api_type === 'mistral' ? 'selected' : ''}>Mistral</option>
+                        <option value="cohere" ${settings.api_type === 'cohere' ? 'selected' : ''}>Cohere</option>
+                        <option value="ollama" ${settings.api_type === 'ollama' ? 'selected' : ''}>Ollama</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">API Key</label>
+                    <input type="password" class="form-control" name="llm.${modelId}.api_key" value="${settings.api_key || ''}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Temperature</label>
+                    <input type="number" class="form-control" name="llm.${modelId}.temperature"
+                        min="0" max="2" step="0.1" value="${settings.temperature || 0.7}">
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Add a new model
 function addNewModel() {
-    const modelName = prompt('Enter a name for the new model:');
-    if (modelName && modelName.trim()) {
-        // Create default settings
-        const defaultSettings = {
-            model: 'gpt-4o',
-            base_url: 'https://api.openai.com/v1',
-            api_key: '',
-            max_tokens: 4096,
-            temperature: 0.7,
-            api_type: 'openai',
-            api_version: ''
-        };
+    const modelId = 'custom_model_' + Date.now();
+    const modelSettings = {
+        model: 'New Custom Model',
+        base_url: '',
+        api_key: '',
+        api_type: 'openai',
+        temperature: 0.7
+    };
 
-        // Add to the list
-        addModelToList(modelName.trim(), defaultSettings);
-    }
-}
+    // Find the models container
+    const modelsContainer = document.querySelector('.models-container');
 
-// Add a model to the configuration list
-function addModelToList(name, settings) {
-    const modelList = document.getElementById('model-list');
-    if (!modelList) return;
+    // If container doesn't exist, create it
+    if (!modelsContainer) {
+        const llmSection = document.getElementById('llm-config');
+        if (llmSection) {
+            const newModelsContainer = document.createElement('div');
+            newModelsContainer.className = 'models-container';
+            newModelsContainer.innerHTML = '<h4>Custom Models</h4>';
+            llmSection.appendChild(newModelsContainer);
 
-    // Clone the template
-    const template = document.getElementById('model-template');
-    const modelEntry = template.content.cloneNode(true);
-
-    // Set model name
-    modelEntry.querySelector('.model-name').textContent = name;
-
-    // Set data attributes for identification
-    const entryDiv = modelEntry.querySelector('.model-entry');
-    entryDiv.dataset.modelName = name;
-
-    // Set field values
-    modelEntry.querySelector('.model-type').value = settings.model || '';
-    modelEntry.querySelector('.model-base-url').value = settings.base_url || '';
-    modelEntry.querySelector('.model-api-key').value = settings.api_key || '';
-    modelEntry.querySelector('.model-temperature').value = settings.temperature || 0.7;
-    modelEntry.querySelector('.temperature-value').textContent = settings.temperature || 0.7;
-    modelEntry.querySelector('.model-max-tokens').value = settings.max_tokens || 4096;
-
-    // Set API type
-    const apiTypeSelect = modelEntry.querySelector('.model-api-type');
-    if (apiTypeSelect) {
-        const apiType = settings.api_type || 'openai';
-        for (let i = 0; i < apiTypeSelect.options.length; i++) {
-            if (apiTypeSelect.options[i].value === apiType) {
-                apiTypeSelect.selectedIndex = i;
-                break;
-            }
+            // Add the model card to the new container
+            newModelsContainer.insertAdjacentHTML('beforeend', createModelCard(modelId, modelSettings));
         }
+    } else {
+        // Add the model card to the existing container
+        modelsContainer.insertAdjacentHTML('beforeend', createModelCard(modelId, modelSettings));
     }
-
-    // Set up temperature slider
-    const tempSlider = modelEntry.querySelector('.model-temperature');
-    const tempValue = modelEntry.querySelector('.temperature-value');
-    if (tempSlider && tempValue) {
-        tempSlider.addEventListener('input', function () {
-            tempValue.textContent = this.value;
-        });
-    }
-
-    // Set up toggle password
-    const toggleBtn = modelEntry.querySelector('.toggle-password');
-    const passwordInput = modelEntry.querySelector('.model-api-key');
-    if (toggleBtn && passwordInput) {
-        toggleBtn.addEventListener('click', function () {
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            toggleBtn.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
-        });
-    }
-
-    // Set up delete button
-    const deleteBtn = modelEntry.querySelector('.model-delete');
-    if (deleteBtn) {
-        deleteBtn.addEventListener('click', function () {
-            if (confirm(`Are you sure you want to delete model "${name}"?`)) {
-                entryDiv.remove();
-            }
-        });
-    }
-
-    // Add to the list
-    modelList.appendChild(entryDiv);
 }
 
-// Save the configuration to the server
+// Remove a model
+function removeModel(modelId) {
+    const modelCard = document.querySelector(`.model-card[data-model-id="${modelId}"]`);
+    if (modelCard) {
+        modelCard.remove();
+    }
+}
+
+// Switch between configuration tabs
+function switchConfigTab(tabId) {
+    // Hide all tab contents
+    const tabContents = document.querySelectorAll('.config-tab-content');
+    tabContents.forEach(tab => tab.style.display = 'none');
+
+    // Show the selected tab content
+    const selectedTab = document.getElementById(tabId);
+    if (selectedTab) {
+        selectedTab.style.display = 'block';
+    }
+
+    // Update active tab state
+    const tabs = document.querySelectorAll('.config-tab');
+    tabs.forEach(tab => tab.classList.remove('active'));
+
+    const activeTab = document.querySelector(`.config-tab[data-tab="${tabId}"]`);
+    if (activeTab) {
+        activeTab.classList.add('active');
+    }
+}
+
+// Save configuration
 function saveConfiguration() {
-    // Build the configuration object
-    const config = {
-        llm: {}
-    };
+    const configForm = document.getElementById('configuration-form');
+    if (!configForm) return;
 
-    // Get LLM models
-    document.querySelectorAll('.model-entry').forEach(entry => {
-        const name = entry.dataset.modelName;
-        if (name) {
-            config.llm[name] = {
-                model: entry.querySelector('.model-type').value,
-                base_url: entry.querySelector('.model-base-url').value,
-                api_key: entry.querySelector('.model-api-key').value,
-                max_tokens: parseInt(entry.querySelector('.model-max-tokens').value),
-                temperature: parseFloat(entry.querySelector('.model-temperature').value),
-                api_type: entry.querySelector('.model-api-type').value,
-                api_version: ''
-            };
+    // Show saving message
+    showToast('Saving configuration...', 'info');
+
+    // Collect form data
+    const formElements = configForm.querySelectorAll('input, select');
+    const config = {};
+
+    formElements.forEach(element => {
+        // Skip elements without name attribute
+        if (!element.name) return;
+
+        // Process path and value
+        const path = element.name.split('.');
+        let value;
+
+        // Handle different element types
+        if (element.type === 'checkbox') {
+            value = element.checked;
+        } else if (element.type === 'number') {
+            value = parseFloat(element.value);
+        } else {
+            value = element.value;
+        }
+
+        // Build nested structure
+        let current = config;
+        for (let i = 0; i < path.length; i++) {
+            const key = path[i];
+
+            if (i === path.length - 1) {
+                // Last element, set the value
+                current[key] = value;
+            } else {
+                // Create nested object if needed
+                if (!current[key] || typeof current[key] !== 'object') {
+                    current[key] = {};
+                }
+                current = current[key];
+            }
         }
     });
-
-    // Get browser settings
-    config.browser = {
-        headless: document.getElementById('browser-headless').checked,
-        disable_security: document.getElementById('browser-disable-security').checked,
-        max_content_length: parseInt(document.getElementById('browser-max-content').value),
-        chrome_instance_path: document.getElementById('browser-chrome-path').value
-    };
-
-    // Get search settings
-    const fallbackEngines = [];
-    document.querySelectorAll('.checkbox-group input[type="checkbox"]:checked').forEach(checkbox => {
-        fallbackEngines.push(checkbox.value);
-    });
-
-    config.search = {
-        engine: document.getElementById('search-engine').value,
-        fallback_engines: fallbackEngines,
-        retry_delay: parseInt(document.getElementById('search-retry-delay').value),
-        max_retries: parseInt(document.getElementById('search-max-retries').value)
-    };
-
-    // Get sandbox settings
-    config.sandbox = {
-        use_sandbox: document.getElementById('sandbox-use').checked,
-        image: document.getElementById('sandbox-image').value,
-        work_dir: document.getElementById('sandbox-work-dir').value,
-        memory_limit: document.getElementById('sandbox-memory').value,
-        cpu_limit: parseFloat(document.getElementById('sandbox-cpu').value),
-        timeout: parseInt(document.getElementById('sandbox-timeout').value),
-        network_enabled: document.getElementById('sandbox-network').checked
-    };
 
     // Send to server
     fetch('/api/config', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ config })
+        body: JSON.stringify({ config }),
     })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to save configuration');
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
-                showToast('Configuration saved successfully!');
-                document.querySelector('#config-modal .close-modal').click();
+                showToast('Configuration saved successfully', 'success');
+
+                // Close modal after saving
+                const configModal = document.getElementById('config-modal');
+                bootstrap.Modal.getInstance(configModal).hide();
             } else {
-                showToast('Error saving configuration: ' + (data.error || 'Unknown error'), 'error');
+                showToast('Error: ' + (data.error || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
             console.error('Error saving configuration:', error);
-            showToast('Error saving configuration: ' + error.message, 'error');
+            showToast('Failed to save configuration: ' + error.message, 'error');
         });
-}
-
-// Show a toast notification
-function showToast(message, type = 'success') {
-    const toast = document.querySelector('.toast');
-    if (toast) {
-        const icon = toast.querySelector('i');
-        if (icon) {
-            icon.className = type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
-        }
-
-        const messageSpan = toast.querySelector('span');
-        if (messageSpan) {
-            messageSpan.textContent = message;
-        }
-
-        toast.className = `toast ${type} show`;
-
-        setTimeout(() => {
-            toast.className = 'toast';
-        }, 3000);
-    }
-}
-
-// Set up tab switching
-function switchTab(tabId) {
-    // Hide all tab contents
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-
-    // Deactivate all tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    // Activate clicked tab
-    document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
-    document.getElementById(`${tabId}-tab`).classList.add('active');
 }
 
 // Initialize all new features

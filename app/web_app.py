@@ -159,12 +159,13 @@ def chat():
         data = request.json
         message = data.get("message", "")
         context = data.get("context", [])
+        model_id = data.get("model", "default")
 
         # Check if LLM is available
         if not is_module_available("tiktoken") or not is_module_available("openai"):
             return jsonify(
                 {
-                    "response": "AI features are not available in lightweight mode. Install AI dependencies with './manage_deps.sh install-ai'",
+                    "response": "AI features are not available in lightweight mode. Install AI dependencies with './cache-manager.sh ai'",
                     "status": "warning",
                 }
             )
@@ -181,8 +182,12 @@ def chat():
                 500,
             )
 
-        # Generate a response (implement proper async handling)
-        response = generate_response(message, context)
+        # Use executor to run async task in the background
+        loop = asyncio.new_event_loop()
+        response = loop.run_until_complete(
+            generate_response(message, model_id, context)
+        )
+        loop.close()
 
         # Return the response
         return jsonify({"response": response, "status": "success"})
@@ -211,35 +216,130 @@ def get_models():
         )
 
     # Get actual models from config
-    models = []
+    try:
+        models = []
 
-    for model_name, model_config in config.get("llm", {}).items():
-        if model_name != "default":  # Skip default config
-            model_info = {
-                "id": model_name,
-                "name": model_config.get("model", model_name),
-                "base_url": model_config.get("base_url", ""),
-                "api_type": model_config.get("api_type", "openai"),
-                "features": ["web_access", "file_upload", "code_execution", "tool_use"],
-            }
-            models.append(model_info)
+        # Try to load the config directly from the toml file
+        try:
+            import tomli
 
-    # If no models found, provide defaults
-    if not models:
-        models = [
-            {
-                "id": "gpt-4o",
-                "name": "GPT-4o",
-                "features": ["web_access", "file_upload", "code_execution", "tool_use"],
-            },
-            {
-                "id": "claude-3-opus",
-                "name": "Claude 3 Opus",
-                "features": ["web_access", "file_upload", "code_execution", "tool_use"],
-            },
-        ]
+            config_path = Path("config/config.toml")
 
-    return jsonify({"models": models})
+            if config_path.exists():
+                with open(config_path, "rb") as f:
+                    toml_config = tomli.load(f)
+                    llm_section = toml_config.get("llm", {})
+
+                    # Process entries that are dictionaries (model configurations)
+                    for model_name, model_config in llm_section.items():
+                        if isinstance(model_config, dict):
+                            model_info = {
+                                "id": model_name,
+                                "name": model_config.get("model", model_name),
+                                "base_url": model_config.get("base_url", ""),
+                                "api_type": model_config.get("api_type", "openai"),
+                                "features": [
+                                    "web_access",
+                                    "file_upload",
+                                    "code_execution",
+                                    "tool_use",
+                                ],
+                            }
+                            models.append(model_info)
+        except Exception as e:
+            logging.error(f"Error loading models from config: {e}")
+
+        # If no models found, provide modern defaults
+        if not models:
+            models = [
+                {
+                    "id": "gpt-4o",
+                    "name": "GPT-4o",
+                    "api_type": "openai",
+                    "features": [
+                        "web_access",
+                        "file_upload",
+                        "code_execution",
+                        "tool_use",
+                        "vision",
+                    ],
+                },
+                {
+                    "id": "gpt-4o-mini",
+                    "name": "GPT-4o Mini",
+                    "api_type": "openai",
+                    "features": [
+                        "web_access",
+                        "file_upload",
+                        "code_execution",
+                        "tool_use",
+                        "vision",
+                    ],
+                },
+                {
+                    "id": "claude-3-opus-20240229",
+                    "name": "Claude 3 Opus",
+                    "api_type": "anthropic",
+                    "features": [
+                        "web_access",
+                        "file_upload",
+                        "code_execution",
+                        "tool_use",
+                        "vision",
+                    ],
+                },
+                {
+                    "id": "claude-3-sonnet-20240229",
+                    "name": "Claude 3 Sonnet",
+                    "api_type": "anthropic",
+                    "features": [
+                        "web_access",
+                        "file_upload",
+                        "code_execution",
+                        "tool_use",
+                        "vision",
+                    ],
+                },
+                {
+                    "id": "claude-3-haiku-20240307",
+                    "name": "Claude 3 Haiku",
+                    "api_type": "anthropic",
+                    "features": [
+                        "web_access",
+                        "file_upload",
+                        "code_execution",
+                        "tool_use",
+                        "vision",
+                    ],
+                },
+                {
+                    "id": "mistral-large-latest",
+                    "name": "Mistral Large",
+                    "api_type": "mistral",
+                    "features": [
+                        "web_access",
+                        "file_upload",
+                        "code_execution",
+                        "tool_use",
+                    ],
+                },
+                {
+                    "id": "command-r",
+                    "name": "Command R",
+                    "api_type": "cohere",
+                    "features": [
+                        "web_access",
+                        "file_upload",
+                        "code_execution",
+                        "tool_use",
+                    ],
+                },
+            ]
+
+        return jsonify({"models": models})
+    except Exception as e:
+        logging.error(f"Error in models API: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/tools", methods=["GET"])
@@ -308,21 +408,102 @@ def upload_file():
 def settings():
     """API endpoint for user settings"""
     if request.method == "GET":
-        # Get current settings from config
-        user_settings = {
-            "theme": "dark",
-            "model": config.get("llm", {}).get("default", "gpt-4o"),
-            "temperature": config.get("llm", {}).get("temperature", 0.7),
-            "save_conversations": True,
-            "max_history": 100,
-            "lightweight_mode": lightweight_mode,
-        }
-        return jsonify({"settings": user_settings})
+        try:
+            # Get config path and read directly
+            config_path = Path("config/config.toml")
+
+            # Default settings if file doesn't exist
+            user_settings = {
+                "theme": "dark",
+                "model": "gpt-4o",
+                "temperature": 0.7,
+                "save_conversations": True,
+                "max_history": 100,
+                "lightweight_mode": lightweight_mode,
+            }
+
+            # Try to read from the config file
+            if config_path.exists():
+                try:
+                    import tomli
+
+                    with open(config_path, "rb") as f:
+                        toml_config = tomli.load(f)
+                        llm_config = toml_config.get("llm", {})
+                        web_config = toml_config.get("web", {})
+                        system_config = toml_config.get("system", {})
+
+                        # Update settings from config
+                        user_settings["model"] = llm_config.get("model", "gpt-4o")
+                        user_settings["temperature"] = llm_config.get(
+                            "temperature", 0.7
+                        )
+                        user_settings["theme"] = web_config.get("theme", "dark")
+                        user_settings["save_conversations"] = web_config.get(
+                            "save_conversations", True
+                        )
+                        user_settings["max_history"] = web_config.get(
+                            "max_history", 100
+                        )
+                        user_settings["lightweight_mode"] = system_config.get(
+                            "lightweight_mode", lightweight_mode
+                        )
+                except Exception as e:
+                    logging.error(f"Error reading user settings: {e}")
+
+            return jsonify({"settings": user_settings})
+        except Exception as e:
+            logging.error(f"Error getting settings: {e}")
+            return jsonify({"error": str(e)}), 500
     else:
-        # Update settings
-        new_settings = request.json.get("settings", {})
-        # Implementation would save these settings
-        return jsonify({"status": "success", "settings": new_settings})
+        try:
+            # Update settings
+            new_settings = request.json.get("settings", {})
+
+            # Read existing config
+            config_path = Path("config/config.toml")
+            import tomli, tomli_w
+
+            if config_path.exists():
+                with open(config_path, "rb") as f:
+                    toml_config = tomli.load(f)
+            else:
+                toml_config = {"llm": {}, "web": {}, "system": {}}
+
+            # Update config with new settings
+            if "model" in new_settings:
+                toml_config["llm"]["model"] = new_settings["model"]
+
+            if "temperature" in new_settings:
+                toml_config["llm"]["temperature"] = new_settings["temperature"]
+
+            if "theme" in new_settings:
+                toml_config["web"]["theme"] = new_settings["theme"]
+
+            if "save_conversations" in new_settings:
+                toml_config["web"]["save_conversations"] = new_settings[
+                    "save_conversations"
+                ]
+
+            if "max_history" in new_settings:
+                toml_config["web"]["max_history"] = new_settings["max_history"]
+
+            if "lightweight_mode" in new_settings:
+                toml_config["system"]["lightweight_mode"] = new_settings[
+                    "lightweight_mode"
+                ]
+
+            # Ensure the config directory exists
+            config_path.parent.mkdir(exist_ok=True)
+
+            # Write updated config
+            with open(config_path, "wb") as f:
+                tomli_w.dump(toml_config, f)
+
+            return jsonify({"status": "success", "settings": new_settings})
+        except Exception as e:
+            logging.error(f"Error updating settings: {e}")
+            return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/config", methods=["GET", "POST"])
@@ -330,25 +511,58 @@ def manage_config():
     """API endpoint for configuration management"""
     if request.method == "GET":
         try:
-            # Get current configuration (mask sensitive data)
-            masked_config = mask_sensitive_config(config)
+            # Get config path and read directly
+            config_path = Path("config/config.toml")
+            if not config_path.exists():
+                return (
+                    jsonify(
+                        {"success": False, "error": "Configuration file not found"}
+                    ),
+                    404,
+                )
+
+            # Read the configuration file
+            import tomli
+
+            with open(config_path, "rb") as f:
+                toml_config = tomli.load(f)
+
+            # Mask sensitive data (API keys)
+            masked_config = mask_sensitive_config(toml_config)
+
             return jsonify({"success": True, "config": masked_config})
         except Exception as e:
-            return jsonify({"success": False, "error": str(e)})
+            logging.error(f"Error getting configuration: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
     else:
         try:
             # Update configuration
             new_config = request.json.get("config", {})
 
-            # Preserve API keys if they are masked
-            preserve_api_keys(config, new_config)
+            # Read existing config
+            config_path = Path("config/config.toml")
+            import tomli, tomli_w
 
-            # Save configuration
-            # Implementation would update and save config
+            if config_path.exists():
+                with open(config_path, "rb") as f:
+                    existing_config = tomli.load(f)
+            else:
+                existing_config = {}
+
+            # Preserve API keys if they are masked
+            preserve_api_keys(existing_config, new_config)
+
+            # Ensure the config directory exists
+            config_path.parent.mkdir(exist_ok=True)
+
+            # Write updated config
+            with open(config_path, "wb") as f:
+                tomli_w.dump(new_config, f)
 
             return jsonify({"success": True})
         except Exception as e:
-            return jsonify({"success": False, "error": str(e)})
+            logging.error(f"Error updating configuration: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/system/stats", methods=["GET"])
@@ -499,7 +713,7 @@ def preserve_api_keys(old_config, new_config):
 
 
 # Async functions for AI processing
-async def generate_response(message, context=None):
+async def generate_response(message, model_id="default", context=None):
     """Generate a response using the LLM"""
     if context is None:
         context = []
@@ -507,17 +721,36 @@ async def generate_response(message, context=None):
     # Check if we're in lightweight mode
     if lightweight_mode:
         await asyncio.sleep(0.5)  # Simulate processing time
-        return "AI features are disabled in lightweight mode. Install AI dependencies with './manage_deps.sh install-ai'"
+        return "AI features are disabled in lightweight mode. Install AI dependencies with './cache-manager.sh ai'"
 
     # If running without LLM, return a placeholder
-    if init_llm() is None:
+    llm_instance = init_llm()
+    if llm_instance is None:
         await asyncio.sleep(1)  # Simulate processing time
-        return f"This is a simulated response to: {message}"
+        return f"I've received your message: {message}. The OpenManus dashboard is running, but the LLM integration is not fully configured yet."
 
-    # Implement real LLM response generation
-    response = "The OpenManus dashboard is now set up and functional. This is a placeholder response until the LLM integration is fully configured."
+    try:
+        # Convert context to messages format expected by LLM
+        formatted_messages = [
+            {"role": "system", "content": "You are OpenManus AI, a helpful assistant."}
+        ]
 
-    return response
+        # Add context messages
+        for ctx_msg in context:
+            if "role" in ctx_msg and "content" in ctx_msg:
+                formatted_messages.append(
+                    {"role": ctx_msg["role"], "content": ctx_msg["content"]}
+                )
+
+        # Add user message
+        formatted_messages.append({"role": "user", "content": message})
+
+        # Call LLM for response
+        response = await llm_instance.ask(formatted_messages)
+        return response
+    except Exception as e:
+        logging.error(f"Error generating response: {e}")
+        return f"I encountered an error while processing your request: {str(e)}"
 
 
 # Run the app
