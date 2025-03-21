@@ -1,7 +1,6 @@
 #!/bin/bash
-
-# OpenManus GUI Plus Installer
-# Smart installation with automatic space optimization
+# OpenManus GUI Plus Installer - Smart Edition
+# Optimized for minimal space requirements with dynamic cache management
 
 set -e  # Exit on error
 
@@ -68,9 +67,14 @@ echo -e "Using Python command: ${GREEN}$PY_CMD${NC}"
 AVAILABLE_SPACE=$(get_available_space)
 echo -e "${BLUE}Available disk space: ${AVAILABLE_SPACE}MB${NC}"
 
+if [ "$AVAILABLE_SPACE" -lt 100 ]; then
+    echo -e "${YELLOW}Warning: Very low disk space detected (${AVAILABLE_SPACE}MB available)${NC}"
+    echo -e "${YELLOW}Installation may fail. Consider freeing up at least 100MB.${NC}"
+fi
+
 # Clone the repository (shallow clone to save space)
 echo -e "${YELLOW}Cloning repository (minimal size)...${NC}"
-git clone --depth=1 https://github.com/mhm22332/openmanusguiplus.git "$INSTALL_DIR" || handle_error "Failed to clone repository"
+git clone --depth=1 --no-tags --single-branch --branch main https://github.com/mhm22332/openmanusguiplus.git "$INSTALL_DIR" || handle_error "Failed to clone repository"
 cd "$INSTALL_DIR" || handle_error "Failed to enter installation directory"
 
 # Clean git objects to save space
@@ -90,43 +94,183 @@ fi
 echo -e "${YELLOW}Activating virtual environment...${NC}"
 source "$ACTIVATE_SCRIPT" || handle_error "Failed to activate virtual environment"
 
-# Configure pip to minimize disk usage
+# Create requirements file with core dependencies
+echo -e "${YELLOW}Creating optimized requirements file...${NC}"
+cat > requirements.txt << EOL
+# Core web server (essential)
+flask==2.3.3
+werkzeug==2.3.7
+markupsafe==2.1.3
+jinja2==3.1.2
+itsdangerous==2.1.2
+click==8.1.7
+
+# Web functionality
+flask-socketio==5.3.6
+flask-cors==4.0.0
+
+# System monitoring
+psutil==5.9.5
+
+# Configuration utilities
+tomli==2.0.1
+tomli_w==1.0.0
+
+# AI capabilities (optional)
+# Comment these out if space is limited
+# tiktoken
+# openai
+EOL
+
+# Configure pip to minimize space usage
+echo -e "${YELLOW}Configuring pip for minimal space usage...${NC}"
+mkdir -p ~/.config/pip
+cat > ~/.config/pip/pip.conf << EOL
+[global]
+no-cache-dir = true
+no-compile = true
+disable-pip-version-check = true
+EOL
+
+# Set environment variables for this session
+export PIP_NO_CACHE_DIR=1
+export PIP_NO_COMPILE=1
+export PYTHONUNBUFFERED=1
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Create cache manager script
+echo -e "${YELLOW}Creating cache manager script...${NC}"
+cat > cache-manager.sh << EOL
+#!/bin/bash
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Activate virtual environment
+source "$ACTIVATE_SCRIPT"
+
+# Set pip to minimize space
 export PIP_NO_CACHE_DIR=1
 export PIP_NO_COMPILE=1
 export PYTHONUNBUFFERED=1
 
-# Create requirements files by priority
-echo -e "${YELLOW}Preparing optimized installation plan...${NC}"
+# Get available space in MB
+get_space() {
+    if [[ "\$OSTYPE" == "darwin"* ]]; then
+        df -m . | tail -1 | awk '{print \$4}'
+    else
+        df -m . | tail -1 | awk '{print \$4}'
+    fi
+}
 
-# Create tier 1 - absolute minimum dependencies (very small footprint)
-cat > requirements-tier1.txt << EOL
-flask==2.3.3
-werkzeug==2.3.7
+# Clean all caches and temporary files
+clean_all() {
+    echo -e "\${YELLOW}Cleaning all caches and temporary files...\${NC}"
+
+    # Clean pip cache
+    pip cache purge
+
+    # Clean Python bytecode files
+    find . -name "__pycache__" -type d -exec rm -rf {} +
+    find . -name "*.pyc" -delete
+    find . -name "*.pyo" -delete
+    find . -name "*.pyd" -delete
+
+    # Clean temporary files
+    rm -rf /tmp/pip-* 2>/dev/null || true
+    rm -rf /tmp/pip_build_* 2>/dev/null || true
+    rm -rf .pytest_cache 2>/dev/null || true
+
+    # Clean __pycache__ directories
+    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+    # Clean downloads directory
+    rm -rf downloads/* 2>/dev/null || true
+
+    echo -e "\${GREEN}Cleanup complete!\${NC}"
+}
+
+# Install or update AI dependencies
+install_ai() {
+    local space=\$(get_space)
+
+    echo -e "\${YELLOW}Checking if we can install AI dependencies (need ~500MB)...\${NC}"
+
+    if [ "\$space" -lt 500 ]; then
+        echo -e "\${RED}Not enough space for AI dependencies.\${NC}"
+        echo -e "\${RED}Available: \${space}MB, Needed: 500MB\${NC}"
+        return 1
+    fi
+
+    echo -e "\${GREEN}Installing AI dependencies...\${NC}"
+    pip install openai tiktoken
+
+    # Update config
+    sed -i 's/lightweight_mode = true/lightweight_mode = false/' config/config.toml 2>/dev/null || \
+    sed -i '' 's/lightweight_mode = true/lightweight_mode = false/' config/config.toml
+
+    return 0
+}
+
+# Show system info
+show_info() {
+    local space=\$(get_space)
+    echo -e "\${BLUE}System Information:\${NC}"
+    echo -e "  Available disk space: \${space}MB"
+
+    echo -e "\${BLUE}Installed Packages:\${NC}"
+    pip list
+
+    echo -e "\${BLUE}Python version:\${NC}"
+    python --version
+}
+
+# Display help
+show_help() {
+    echo -e "\${BLUE}OpenManus Cache Manager\${NC}"
+    echo -e "Usage: ./cache-manager.sh [command]"
+    echo -e ""
+    echo -e "Commands:"
+    echo -e "  clean       Clean all caches and temporary files"
+    echo -e "  ai          Install AI dependencies (if space available)"
+    echo -e "  info        Show system information and installed packages"
+    echo -e "  help        Show this help message"
+}
+
+# Process command
+if [ "\$#" -eq 0 ]; then
+    show_help
+else
+    case "\$1" in
+        clean)
+            clean_all
+            ;;
+        ai)
+            install_ai
+            ;;
+        info)
+            show_info
+            ;;
+        help)
+            show_help
+            ;;
+        *)
+            echo -e "\${RED}Unknown command: \$1\${NC}"
+            show_help
+            ;;
+    esac
+fi
 EOL
 
-# Create tier 2 - basic web functionality (small footprint)
-cat > requirements-tier2.txt << EOL
-flask-socketio==5.3.6
-flask-cors==4.0.0
-psutil==5.9.5
-EOL
-
-# Create tier 3 - configuration and utilities (medium footprint)
-cat > requirements-tier3.txt << EOL
-tomli==2.0.1
-tomli_w==1.0.0
-EOL
-
-# Create tier 4 - AI dependencies (large footprint)
-cat > requirements-tier4.txt << EOL
-tiktoken
-openai
-EOL
+chmod +x cache-manager.sh
 
 # Create config directory
 mkdir -p config
 
-# Create smart configuration file that adapts to installed dependencies
+# Create smart configuration file
 echo -e "${YELLOW}Creating adaptive configuration...${NC}"
 cat > config/config.toml << EOL
 # Global LLM configuration
@@ -148,103 +292,9 @@ debug = false
 [system]
 max_tokens_limit = 8192
 max_concurrent_requests = 2
-# Sets itself automatically based on what's installed
 lightweight_mode = true
+cache_dir = ".cache"
 EOL
-
-# Create smart installer script that can resume installation
-echo -e "${YELLOW}Creating smart dependency installer...${NC}"
-cat > install-deps.sh << EOL
-#!/bin/bash
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-# Activate virtual environment
-ACTIVATE_SCRIPT=".venv/bin/activate"
-if [[ "\$OSTYPE" == "msys" || "\$OSTYPE" == "win32" ]]; then
-    ACTIVATE_SCRIPT=".venv/Scripts/activate"
-fi
-source "\$ACTIVATE_SCRIPT"
-
-# Configure pip
-export PIP_NO_CACHE_DIR=1
-export PIP_NO_COMPILE=1
-
-# Get available space in MB
-get_space() {
-    if [[ "\$OSTYPE" == "darwin"* ]]; then
-        df -m . | tail -1 | awk '{print \$4}'
-    else
-        df -m . | tail -1 | awk '{print \$4}'
-    fi
-}
-
-# Install a tier with space check
-install_tier() {
-    local tier=\$1
-    local needed=\$2
-    local desc=\$3
-
-    echo -e "\${YELLOW}Checking if we can install \${desc} (\${needed}MB needed)...\${NC}"
-    local space=\$(get_space)
-
-    if [ "\$space" -lt "\$needed" ]; then
-        echo -e "\${RED}Not enough space to install \${desc}.\${NC}"
-        echo -e "\${RED}Available: \${space}MB, Needed: \${needed}MB\${NC}"
-        return 1
-    fi
-
-    echo -e "\${GREEN}Installing \${desc}...\${NC}"
-    pip install --no-cache-dir --no-deps -r "requirements-tier\${tier}.txt" && touch ".tier\${tier}-installed"
-    local result=\$?
-
-    if [ \$result -ne 0 ]; then
-        echo -e "\${RED}Failed to install \${desc}.\${NC}"
-        return \$result
-    fi
-
-    echo -e "\${GREEN}Successfully installed \${desc}!\${NC}"
-    return 0
-}
-
-# Always try to install lower tiers if not already installed
-if [ ! -f ".tier1-installed" ]; then
-    install_tier 1 20 "core web server" || exit 1
-fi
-
-if [ ! -f ".tier2-installed" ]; then
-    install_tier 2 30 "web functionality" || echo -e "\${YELLOW}Continuing with limited web functionality\${NC}"
-fi
-
-if [ ! -f ".tier3-installed" ]; then
-    install_tier 3 20 "configuration utilities" || echo -e "\${YELLOW}Continuing with limited configuration capabilities\${NC}"
-fi
-
-if [ ! -f ".tier4-installed" ]; then
-    install_tier 4 500 "AI capabilities" || echo -e "\${YELLOW}AI capabilities not installed. Run this script later when you have more disk space.\${NC}"
-fi
-
-# Summarize what's installed
-echo -e "\${BLUE}Installation summary:\${NC}"
-[ -f ".tier1-installed" ] && echo -e "  ✅ Core web server" || echo -e "  ❌ Core web server"
-[ -f ".tier2-installed" ] && echo -e "  ✅ Web functionality" || echo -e "  ❌ Web functionality"
-[ -f ".tier3-installed" ] && echo -e "  ✅ Configuration utilities" || echo -e "  ❌ Configuration utilities"
-[ -f ".tier4-installed" ] && echo -e "  ✅ AI capabilities" || echo -e "  ❌ AI capabilities (run this script later to add them)"
-
-# Update config based on what's installed
-if [ -f ".tier4-installed" ]; then
-    sed -i 's/lightweight_mode = true/lightweight_mode = false/' config/config.toml 2>/dev/null || \
-    sed -i '' 's/lightweight_mode = true/lightweight_mode = false/' config/config.toml
-fi
-
-echo -e "\${GREEN}Done! Run ./start.sh to start the application.\${NC}"
-EOL
-
-chmod +x install-deps.sh
 
 # Create optimized startup script
 echo -e "${YELLOW}Creating optimized startup script...${NC}"
@@ -262,11 +312,8 @@ export PIP_NO_CACHE_DIR=1
 # Activate virtual environment
 source "$ACTIVATE_SCRIPT"
 
-# Check if any dependencies are installed before starting
-if [ ! -f ".tier1-installed" ]; then
-    echo "First-time setup: Installing critical dependencies..."
-    ./install-deps.sh
-fi
+# Clean cache to free up space before starting
+./cache-manager.sh clean
 
 # Run with memory optimization
 python -X no_debug_ranges run_web_app.py
@@ -274,47 +321,44 @@ EOL
 
 chmod +x start.sh
 
-# Create disk space cleanup utility
-echo -e "${YELLOW}Creating space cleanup utility...${NC}"
-cat > cleanup-space.sh << EOL
-#!/bin/bash
-
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-echo -e "\${YELLOW}Cleaning up to free disk space...\${NC}"
-
-# Activate virtual environment
-source "$ACTIVATE_SCRIPT"
-
-# Clean pip cache
+# Install minimal dependencies first
+echo -e "${YELLOW}Installing minimal dependencies...${NC}"
+# Clean any remnant caches first
 pip cache purge
 
-# Remove __pycache__ directories
-find . -type d -name "__pycache__" -exec rm -rf {} +
+# Set temp directory to the installation directory to avoid filling /tmp
+export TMPDIR="$INSTALL_DIR/tmp"
+mkdir -p "$TMPDIR"
 
-# Clean temporary files
-rm -rf /tmp/pip-* 2>/dev/null
-rm -rf /tmp/pip_build_* 2>/dev/null
-rm -rf .pytest_cache 2>/dev/null
+# Do a minimal install first
+pip install --no-cache-dir Flask==2.3.3 markupsafe==2.1.3 Werkzeug==2.3.7 Jinja2==3.1.2 click==8.1.7 itsdangerous==2.1.2
 
-# Remove compiled Python files
-find . -name "*.pyc" -delete
-find . -name "*.pyo" -delete
-find . -name "*.pyd" -delete
+# Check disk space again
+SPACE_AFTER_MINIMAL=$(get_available_space)
+echo -e "${BLUE}Available disk space after minimal install: ${SPACE_AFTER_MINIMAL}MB${NC}"
 
-# Clean downloads
-rm -rf downloads/* 2>/dev/null
+# Install web functionality if space allows
+if [ "$SPACE_AFTER_MINIMAL" -gt 50 ]; then
+    echo -e "${YELLOW}Installing web functionality...${NC}"
+    pip install --no-cache-dir flask-socketio==5.3.6 flask-cors==4.0.0 psutil==5.9.5
 
-echo -e "\${GREEN}Cleanup complete!\${NC}"
-EOL
+    # Check disk space again
+    SPACE_AFTER_WEB=$(get_available_space)
 
-chmod +x cleanup-space.sh
+    # Install config utilities if space allows
+    if [ "$SPACE_AFTER_WEB" -gt 30 ]; then
+        echo -e "${YELLOW}Installing configuration utilities...${NC}"
+        pip install --no-cache-dir tomli==2.0.1 tomli_w==1.0.0
+    fi
+else
+    echo -e "${YELLOW}Limited disk space: Skipping additional web dependencies${NC}"
+fi
 
-# Now run the dependency installer
-echo -e "${YELLOW}Starting smart dependency installation...${NC}"
-./install-deps.sh
+# Clean temp directory to save space
+rm -rf "$TMPDIR"
+
+# Clean cache to free up space
+./cache-manager.sh clean
 
 # Print success message
 echo -e "${GREEN}==============================================${NC}"
@@ -324,9 +368,9 @@ echo -e "To run OpenManus GUI Plus:"
 echo -e "  1. Navigate to: ${YELLOW}$INSTALL_DIR${NC}"
 echo -e "  2. Run: ${YELLOW}./start.sh${NC}"
 echo -e ""
-echo -e "If you need to add AI capabilities later:"
-echo -e "  Run: ${YELLOW}./install-deps.sh${NC}"
+echo -e "To manage caches and dependencies:"
+echo -e "  Run: ${YELLOW}./cache-manager.sh help${NC}"
 echo -e ""
-echo -e "To free up disk space:"
-echo -e "  Run: ${YELLOW}./cleanup-space.sh${NC}"
+echo -e "To install AI capabilities if you have enough space (500MB+):"
+echo -e "  Run: ${YELLOW}./cache-manager.sh ai${NC}"
 echo -e "${GREEN}==============================================${NC}"
