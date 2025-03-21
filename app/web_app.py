@@ -745,9 +745,18 @@ async def generate_response(message, model_id="default", context=None):
         # Add user message
         formatted_messages.append({"role": "user", "content": message})
 
-        # Call LLM for response
-        response = await llm_instance.ask(formatted_messages)
-        return response
+        try:
+            # Try to call LLM for response
+            response = await llm_instance.ask(formatted_messages)
+            return response
+        except AttributeError:
+            # In case llm_instance doesn't have ask method
+            logging.warning("LLM instance doesn't have ask method, using fallback")
+            await asyncio.sleep(1)  # Simulate thinking
+            return f"I received your message: '{message}'. This is a simulated response since the LLM integration is not properly configured."
+        except Exception as inner_e:
+            logging.error(f"Error calling LLM: {inner_e}")
+            return f"I'm sorry, I encountered an error when processing your request through the language model: {str(inner_e)}"
     except Exception as e:
         logging.error(f"Error generating response: {e}")
         return f"I encountered an error while processing your request: {str(e)}"

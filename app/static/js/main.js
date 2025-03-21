@@ -1,21 +1,45 @@
 // Main JavaScript for OpenManus Web UI Dashboard
 
 document.addEventListener('DOMContentLoaded', function () {
-    // Initialize the UI
-    initializeUI();
+    console.log('Initializing OpenManus Dashboard');
 
-    // Set up event listeners
+    // Initialize all components
+    initializeUI();
     setupEventListeners();
+    initSystemMonitor();
+    initConfigurationManager();
 
     // Auto-resize textarea
     const userInput = document.getElementById('user-input');
     if (userInput) {
         userInput.addEventListener('input', autoResizeTextarea);
     }
+
+    // Set up global click handler for modals
+    document.addEventListener('click', function (e) {
+        if (e.target.hasAttribute('data-modal')) {
+            const modalId = e.target.getAttribute('data-modal');
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                showModal(modal);
+            }
+        }
+
+        // Handle settings link clicks based on icon or parent element
+        if (e.target.classList.contains('fa-cog') ||
+            (e.target.parentElement && e.target.parentElement.getAttribute('data-modal') === 'settings-modal')) {
+            const settingsModal = document.getElementById('settings-modal');
+            if (settingsModal) {
+                showModal(settingsModal);
+            }
+        }
+    });
 });
 
 // Initialize UI components
 function initializeUI() {
+    console.log('Setting up UI...');
+
     // Check for preferred theme
     const prefersDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     const savedTheme = localStorage.getItem('theme') || (prefersDarkMode ? 'dark' : 'light');
@@ -29,10 +53,49 @@ function initializeUI() {
 
     // Show welcome message animation
     animateWelcomeMessage();
+
+    // Load models into selector
+    loadModels();
+}
+
+// Load available models
+function loadModels() {
+    const modelSelect = document.getElementById('model-select');
+    if (!modelSelect) return;
+
+    // Show loading state
+    modelSelect.innerHTML = '<option value="">Loading models...</option>';
+
+    // Fetch models from API
+    fetch('/api/models')
+        .then(response => response.json())
+        .then(data => {
+            if (data.models && data.models.length > 0) {
+                // Clear loading option
+                modelSelect.innerHTML = '';
+
+                // Add each model
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    if (model.disabled) {
+                        option.disabled = true;
+                    }
+                    modelSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error loading models:', error);
+            modelSelect.innerHTML = '<option value="default">Default Model</option>';
+        });
 }
 
 // Set up event listeners for UI interactions
 function setupEventListeners() {
+    console.log('Setting up event listeners...');
+
     // Theme toggle
     const themeToggle = document.querySelector('.theme-toggle');
     if (themeToggle) {
@@ -62,6 +125,10 @@ function setupEventListeners() {
     actionButtons.forEach(btn => {
         btn.addEventListener('click', function () {
             const action = this.dataset.action;
+            if (!action) {
+                console.error('No action specified for button', this);
+                return;
+            }
             handleSuggestedAction(action);
         });
     });
@@ -71,6 +138,10 @@ function setupEventListeners() {
     toolOptions.forEach(option => {
         option.addEventListener('click', function () {
             const tool = this.dataset.tool;
+            if (!tool) {
+                console.error('No tool specified for option', this);
+                return;
+            }
             activateTool(tool);
         });
     });
@@ -86,31 +157,171 @@ function setupEventListeners() {
         btn.addEventListener('click', toggleVisualizationPanel);
     });
 
+    // Tool menu in sidebar
+    const toolItems = document.querySelectorAll('.tool-item');
+    toolItems.forEach(item => {
+        item.addEventListener('click', function () {
+            const tool = this.dataset.tool;
+            if (!tool) {
+                console.error('No tool specified for item', this);
+                return;
+            }
+            activateTool(tool);
+        });
+    });
+
     // Tab switching in visualization panel
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', function () {
             const tabId = this.dataset.tab;
+            if (!tabId) {
+                console.error('No tab ID specified for button', this);
+                return;
+            }
             switchTab(tabId);
         });
     });
 
     // Context items removal
+    setupContextItemRemoval();
+
+    // Modal close buttons
+    document.querySelectorAll('.close-modal').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const modal = this.closest('.modal');
+            if (modal) {
+                hideModal(modal);
+            }
+        });
+    });
+
+    // Close modal when clicking outside
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function (e) {
+            if (e.target === this) {
+                hideModal(this);
+            }
+        });
+    });
+
+    // Settings buttons
+    const settingsButtons = document.querySelectorAll('.btn-settings, .sidebar-nav a[title="Settings"]');
+    settingsButtons.forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            openSettingsModal();
+        });
+    });
+
+    // Configuration buttons
+    const configButtons = document.querySelectorAll('.btn-config, .sidebar-nav a[title="Configuration"]');
+    configButtons.forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const configModal = document.getElementById('config-modal');
+            if (configModal) {
+                showModal(configModal);
+                loadConfiguration();
+            }
+        });
+    });
+
+    // Settings save button
+    const saveSettingsBtn = document.querySelector('#settings-modal .btn-primary');
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', function () {
+            saveSettings();
+        });
+    }
+}
+
+// Setup context item removal (dynamically added items)
+function setupContextItemRemoval() {
     document.querySelectorAll('.context-item button').forEach(btn => {
         btn.addEventListener('click', function () {
             removeContextItem(this.parentNode);
         });
     });
 
-    // Modal close buttons
-    document.querySelectorAll('.close-modal').forEach(btn => {
-        btn.addEventListener('click', closeModal);
-    });
-
-    // Settings button
-    const settingsButton = document.querySelector('li a[href="#"][title="Settings"], .sidebar-nav a[href="#"]:has(i.fas.fa-cog)');
-    if (settingsButton) {
-        settingsButton.addEventListener('click', openSettingsModal);
+    // Also add event handler to the clear all button
+    const clearContextBtn = document.querySelector('.context-header button');
+    if (clearContextBtn) {
+        clearContextBtn.addEventListener('click', function () {
+            const contextItems = document.querySelector('.context-items');
+            if (contextItems) {
+                contextItems.innerHTML = '';
+            }
+        });
     }
+}
+
+// Show a modal
+function showModal(modal) {
+    modal.style.display = 'block';
+    modal.classList.add('visible');
+}
+
+// Hide a modal
+function hideModal(modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('visible');
+}
+
+// Save settings
+function saveSettings() {
+    // Collect settings from form
+    const theme = document.querySelector('#settings-modal input[name="theme"]:checked')?.value || 'dark';
+    const fontSize = document.getElementById('font-size-slider')?.value || '16';
+    const model = document.querySelector('#settings-modal select[name="model"]')?.value || 'gpt-4o';
+    const temperature = document.getElementById('temperature-slider')?.value || '0.7';
+    const saveConversations = document.querySelector('#settings-modal input[name="save-conversations"]')?.checked || true;
+    const allowWebSearches = document.querySelector('#settings-modal input[name="allow-web-searches"]')?.checked || true;
+    const dataRetentionPeriod = document.querySelector('#settings-modal select[name="data-retention"]')?.value || '30';
+
+    // Create settings object
+    const settings = {
+        theme,
+        fontSize,
+        model,
+        temperature,
+        saveConversations,
+        allowWebSearches,
+        dataRetentionPeriod
+    };
+
+    // Show saving toast
+    showToast('Saving settings...', 'info');
+
+    // Save to API
+    fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ settings })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast('Settings saved successfully!', 'success');
+
+                // Apply theme and font size immediately
+                setTheme(theme);
+                document.documentElement.style.fontSize = `${fontSize}px`;
+
+                // Close modal
+                const modal = document.getElementById('settings-modal');
+                if (modal) {
+                    hideModal(modal);
+                }
+            } else {
+                showToast('Error saving settings: ' + (data.error || 'Unknown error'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error saving settings:', error);
+            showToast('Failed to save settings. Please try again.', 'error');
+        });
 }
 
 // Handle sending a user message
@@ -645,29 +856,6 @@ function openSettingsModal() {
             settingsModal.style.display = 'block';
         }
     }
-}
-
-// Close the currently open modal - with fallbacks for different modal systems
-function closeModal() {
-    document.querySelectorAll('.modal.visible, .modal.active, .modal.show').forEach(modal => {
-        modal.classList.remove('visible');
-        modal.classList.remove('active');
-        modal.classList.remove('show');
-
-        // If this is a Bootstrap modal and Bootstrap is available
-        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            try {
-                const bsModal = bootstrap.Modal.getInstance(modal);
-                if (bsModal) bsModal.hide();
-            } catch (e) {
-                console.warn('Bootstrap modal hide failed, using fallback', e);
-                modal.style.display = 'none';
-            }
-        } else {
-            // Fallback for non-Bootstrap
-            modal.style.display = 'none';
-        }
-    });
 }
 
 // Show a toast notification
@@ -1437,38 +1625,3 @@ function saveConfiguration() {
             showToast('Failed to save configuration: ' + error.message, 'error');
         });
 }
-
-// Initialize all new features
-document.addEventListener('DOMContentLoaded', function () {
-    // Initialize the original UI
-    initializeUI();
-
-    // Set up event listeners
-    setupEventListeners();
-
-    // Initialize system monitoring
-    initSystemMonitor();
-
-    // Initialize configuration manager
-    initConfigurationManager();
-
-    // Auto-resize textarea
-    const userInput = document.getElementById('user-input');
-    if (userInput) {
-        userInput.addEventListener('input', autoResizeTextarea);
-    }
-
-    // Set up modal handling
-    document.querySelectorAll('[data-modal]').forEach(button => {
-        button.addEventListener('click', function () {
-            const modalId = this.dataset.modal;
-            document.getElementById(modalId).classList.add('active');
-        });
-    });
-
-    document.querySelectorAll('.close-modal').forEach(button => {
-        button.addEventListener('click', function () {
-            this.closest('.modal').classList.remove('active');
-        });
-    });
-});
