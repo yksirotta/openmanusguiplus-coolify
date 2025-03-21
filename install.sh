@@ -170,22 +170,24 @@ get_space() {
 clean_all() {
     echo -e "\${YELLOW}Cleaning all caches and temporary files...\${NC}"
 
-    # Clean pip cache
-    pip cache purge
+    # Try to clean pip cache only if caching is enabled
+    if [ "\$PIP_NO_CACHE_DIR" != "1" ]; then
+        echo -e "\${YELLOW}Attempting to clean pip cache...${NC}"
+        pip cache purge 2>/dev/null || echo -e "\${YELLOW}Pip cache already disabled (good for space saving)${NC}"
+    fi
 
     # Clean Python bytecode files
-    find . -name "__pycache__" -type d -exec rm -rf {} +
+    echo -e "\${YELLOW}Cleaning Python bytecode files...${NC}"
+    find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
     find . -name "*.pyc" -delete
     find . -name "*.pyo" -delete
     find . -name "*.pyd" -delete
 
     # Clean temporary files
+    echo -e "\${YELLOW}Cleaning temporary files...${NC}"
     rm -rf /tmp/pip-* 2>/dev/null || true
     rm -rf /tmp/pip_build_* 2>/dev/null || true
     rm -rf .pytest_cache 2>/dev/null || true
-
-    # Clean __pycache__ directories
-    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
     # Clean downloads directory
     rm -rf downloads/* 2>/dev/null || true
@@ -206,7 +208,7 @@ install_ai() {
     fi
 
     echo -e "\${GREEN}Installing AI dependencies...\${NC}"
-    pip install openai tiktoken
+    pip install --no-cache-dir openai tiktoken
 
     # Update config
     sed -i 's/lightweight_mode = true/lightweight_mode = false/' config/config.toml 2>/dev/null || \
@@ -312,7 +314,7 @@ export PIP_NO_CACHE_DIR=1
 # Activate virtual environment
 source "$ACTIVATE_SCRIPT"
 
-# Clean cache to free up space before starting
+# Clean temporary files before starting
 ./cache-manager.sh clean
 
 # Run with memory optimization
@@ -323,8 +325,7 @@ chmod +x start.sh
 
 # Install minimal dependencies first
 echo -e "${YELLOW}Installing minimal dependencies...${NC}"
-# Clean any remnant caches first
-pip cache purge
+# No need to clean cache since it's already disabled
 
 # Set temp directory to the installation directory to avoid filling /tmp
 export TMPDIR="$INSTALL_DIR/tmp"
@@ -357,8 +358,13 @@ fi
 # Clean temp directory to save space
 rm -rf "$TMPDIR"
 
-# Clean cache to free up space
-./cache-manager.sh clean
+# Clean temporary files
+echo -e "${YELLOW}Cleaning up temporary files...${NC}"
+# Clean Python bytecode files
+find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+find . -name "*.pyc" -delete
+find . -name "*.pyo" -delete
+find . -name "*.pyd" -delete
 
 # Print success message
 echo -e "${GREEN}==============================================${NC}"
