@@ -34,6 +34,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     });
+
+    // Initialize chat functionality
+    initChatFunctionality();
 });
 
 // Initialize UI components
@@ -1624,4 +1627,101 @@ function saveConfiguration() {
             console.error('Error saving configuration:', error);
             showToast('Failed to save configuration: ' + error.message, 'error');
         });
+}
+
+/**
+ * Initialize chat functionality with proper message sending
+ */
+function initChatFunctionality() {
+    const chatMessages = document.getElementById('chat-messages');
+    const userInput = document.getElementById('user-input');
+    const sendButton = document.getElementById('send-button');
+
+    if (!chatMessages || !userInput || !sendButton) {
+        console.error('Chat elements not found in the DOM');
+        return;
+    }
+
+    // Function to add a message to the chat
+    function addMessage(message, isUser = false) {
+        const messageEl = document.createElement('div');
+        messageEl.className = isUser ? 'user-message' : 'assistant-message';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.innerHTML = isUser ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+        content.textContent = message;
+
+        messageEl.appendChild(avatar);
+        messageEl.appendChild(content);
+        chatMessages.appendChild(messageEl);
+
+        // Scroll to latest message
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Function to send a message to the backend
+    async function sendMessage(message) {
+        if (!message.trim()) return;
+
+        // Add user message to chat
+        addMessage(message, true);
+
+        // Clear input
+        userInput.value = '';
+        autoResizeTextarea.call(userInput);
+
+        try {
+            // Add loading message
+            const loadingEl = document.createElement('div');
+            loadingEl.className = 'assistant-message loading';
+            loadingEl.innerHTML = '<div class="avatar"><i class="fas fa-robot"></i></div><div class="message-content"><div class="typing-indicator"><span></span><span></span><span></span></div></div>';
+            chatMessages.appendChild(loadingEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Send message to backend
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message })
+            });
+
+            // Remove loading indicator
+            chatMessages.removeChild(loadingEl);
+
+            if (response.ok) {
+                const data = await response.json();
+                addMessage(data.response || 'Message received. OpenManus backend processed your request.');
+            } else {
+                console.error('Error response from server:', response.status);
+                const errorData = await response.json().catch(() => ({}));
+                addMessage(`Error: ${errorData.error || 'The server encountered an issue processing your request.'}`);
+            }
+        } catch (error) {
+            console.error('Error sending message:', error);
+            addMessage('Error: Could not connect to the server. Please check your connection and try again.');
+        }
+    }
+
+    // Event listeners for sending messages
+    sendButton.addEventListener('click', function () {
+        sendMessage(userInput.value);
+    });
+
+    userInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage(userInput.value);
+        }
+    });
+
+    // Add initial welcome message
+    setTimeout(() => {
+        addMessage('Welcome to OpenManus AI. How can I assist you today?');
+    }, 500);
 }

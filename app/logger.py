@@ -1,10 +1,32 @@
 import sys
+import os
+import logging
 from datetime import datetime
+from pathlib import Path
 
-from loguru import logger as _logger
+# Try to import loguru, but provide a fallback if it's not available
+try:
+    from loguru import logger as _logger
 
-from app.config import PROJECT_ROOT
+    LOGURU_AVAILABLE = True
+except ImportError:
+    LOGURU_AVAILABLE = False
+    # Set up a basic logger as fallback
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    _logger = logging.getLogger("openmanusguiplus")
 
+# Try to import from config, but provide fallback if it fails
+try:
+    from app.config import PROJECT_ROOT
+except ImportError:
+    # Fallback if config import fails
+    def get_project_root():
+        return Path(__file__).resolve().parent.parent
+
+    PROJECT_ROOT = get_project_root()
 
 _print_level = "INFO"
 
@@ -20,14 +42,27 @@ def define_log_level(print_level="INFO", logfile_level="DEBUG", name: str = None
         f"{name}_{formatted_date}" if name else formatted_date
     )  # name a log with prefix name
 
-    _logger.remove()
-    _logger.add(sys.stderr, level=print_level)
-
     # Ensure the logs directory exists
     log_dir = PROJECT_ROOT / "logs"
     log_dir.mkdir(exist_ok=True)
 
-    _logger.add(PROJECT_ROOT / f"logs/{log_name}.log", level=logfile_level)
+    if LOGURU_AVAILABLE:
+        _logger.remove()
+        _logger.add(sys.stderr, level=print_level)
+        _logger.add(PROJECT_ROOT / f"logs/{log_name}.log", level=logfile_level)
+    else:
+        # Configure the standard logging module
+        handler = logging.FileHandler(PROJECT_ROOT / f"logs/{log_name}.log")
+        handler.setLevel(getattr(logging, logfile_level))
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        _logger.addHandler(handler)
+
+        # Set console level
+        _logger.setLevel(getattr(logging, print_level))
+
     return _logger
 
 

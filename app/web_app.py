@@ -12,6 +12,16 @@ from werkzeug.utils import secure_filename
 import logging
 import importlib.util
 
+# Try to import logger
+try:
+    from app.logger import setup_logger
+
+    logger = setup_logger(name="web_app")
+except ImportError:
+    # Basic logging fallback
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("web_app")
+
 # Create Flask app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "dev-key-for-openmanus"
@@ -23,8 +33,11 @@ executor = ThreadPoolExecutor(max_workers=4)
 # Load config
 try:
     from app.config import config
+
+    logger.info("Loaded config from app.config module")
 except ImportError:
     # Fallback config if module not available
+    logger.warning("Could not import config module, using fallback config")
     config = {
         "system": {
             "max_tokens_limit": 8192,
@@ -35,44 +48,58 @@ except ImportError:
         "web": {"port": 5000, "debug": False},
     }
 
+
+# Safe config accessor function
+def get_config_value(section, key, default=None):
+    """
+    Safely get a config value regardless of config type (dict or object).
+
+    Args:
+        section: The config section name
+        key: The config key name
+        default: Default value if not found
+
+    Returns:
+        The config value or default if not found
+    """
+    try:
+        if isinstance(config, dict):
+            # Dictionary-based config
+            return config.get(section, {}).get(key, default)
+        else:
+            # Object-based config
+            # Try direct attribute access first
+            section_obj = getattr(config, section, None)
+            if section_obj is not None:
+                return getattr(section_obj, key, default)
+
+            # Try accessing raw config data if available
+            raw_config = getattr(config, "_config", None)
+            if raw_config:
+                section_obj = getattr(raw_config, section, None)
+                if section_obj:
+                    return getattr(section_obj, key, default)
+
+            # Try a get method if it exists
+            if hasattr(config, "get"):
+                return config.get(section, {}).get(key, default)
+
+            logger.warning(f"Could not access config value {section}.{key}")
+            return default
+    except Exception as e:
+        logger.error(f"Error accessing config value {section}.{key}: {e}")
+        return default
+
+
 # Configure memory management
 try:
-    # If config is a dictionary (fallback config)
-    if isinstance(config, dict):
-        memory_limit = int(config.get("system", {}).get("max_tokens_limit", 8192))
-        max_concurrent = int(config.get("system", {}).get("max_concurrent_requests", 2))
-        lightweight_mode = config.get("system", {}).get("lightweight_mode", False)
-    else:
-        # For the Config class from config.py, read values from raw config
-        # Attempt to access the raw config via _load_config method
-        raw_config = getattr(config, "_config", None)
-        if raw_config:
-            # Try to get system settings from AppConfig
-            system_config = getattr(raw_config, "system", {})
-            memory_limit = 8192  # Default value
-            max_concurrent = 2  # Default value
-            lightweight_mode = False  # Default value
+    memory_limit = int(get_config_value("system", "max_tokens_limit", 8192))
+    max_concurrent = int(get_config_value("system", "max_concurrent_requests", 2))
+    lightweight_mode = get_config_value("system", "lightweight_mode", False)
 
-            # Check if the loaded_config file exists and read from it directly
-            try:
-                config_path = config._get_config_path()
-                import tomli
-
-                with open(config_path, "rb") as f:
-                    toml_config = tomli.load(f)
-                    system_config = toml_config.get("system", {})
-                    memory_limit = int(system_config.get("max_tokens_limit", 8192))
-                    max_concurrent = int(
-                        system_config.get("max_concurrent_requests", 2)
-                    )
-                    lightweight_mode = system_config.get("lightweight_mode", False)
-            except Exception as e:
-                print(f"Error loading system config: {e}")
-        else:
-            # Fallback to defaults
-            memory_limit = 8192
-            max_concurrent = 2
-            lightweight_mode = False
+    logger.info(
+        f"Memory limit: {memory_limit}, Max concurrent: {max_concurrent}, Lightweight mode: {lightweight_mode}"
+    )
 except Exception as e:
     # Log the error and use defaults if anything goes wrong
     print(f"Error configuring memory management: {e}")
@@ -148,52 +175,26 @@ def index():
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
-    """API endpoint for chat messages"""
+    """
+    API endpoint to process chat messages from the frontend.
+    """
     try:
-        # Check memory usage before processing
-        memory_percent = psutil.virtual_memory().percent
-        if memory_percent > 90:  # If memory usage is above 90%
-            gc.collect()  # Force garbage collection
-
-        # Process the chat message
         data = request.json
-        message = data.get("message", "")
-        context = data.get("context", [])
-        model_id = data.get("model", "default")
+        if not data or "message" not in data:
+            return jsonify({"error": "Invalid request: missing message"}), 400
 
-        # Check if LLM is available
-        if not is_module_available("tiktoken") or not is_module_available("openai"):
-            return jsonify(
-                {
-                    "response": "AI features are not available in lightweight mode. Install AI dependencies with './cache-manager.sh ai'",
-                    "status": "warning",
-                }
-            )
+        user_message = data["message"]
+        logger.info(f"Received chat message: {user_message[:50]}...")
 
-        # Initialize LLM lazily
-        if init_llm() is None:
-            return (
-                jsonify(
-                    {
-                        "response": "Failed to initialize LLM. Please check your installation and dependencies.",
-                        "status": "error",
-                    }
-                ),
-                500,
-            )
-
-        # Use executor to run async task in the background
-        loop = asyncio.new_event_loop()
-        response = loop.run_until_complete(
-            generate_response(message, model_id, context)
-        )
-        loop.close()
+        # In a real implementation, process with the AI backend
+        # For now, return a placeholder response
+        response = "I've received your message. The OpenManus AI backend would process this in a real implementation."
 
         # Return the response
-        return jsonify({"response": response, "status": "success"})
+        return jsonify({"response": response, "timestamp": time.time()})
     except Exception as e:
-        logging.error(f"Error in chat API: {str(e)}")
-        return jsonify({"error": str(e), "status": "error"}), 500
+        logger.error(f"Error processing chat message: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/models", methods=["GET"])

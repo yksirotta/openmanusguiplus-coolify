@@ -9,19 +9,67 @@ Run this script to start the web interface.
 import os
 import logging
 import sys
-import tomli
+import importlib.util
 from pathlib import Path
 
 # Add the parent directory to sys.path to ensure imports work correctly
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# Import web app and config
-from app.web_app import app
-from app.config import config
-from app.logger import setup_logger
+# Set up basic logging first in case imports fail
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("web_dashboard")
 
-# Set up logging
-logger = setup_logger("web_dashboard")
+# Try importing dependencies with fallbacks
+try:
+    import tomli
+except ImportError:
+    logger.warning("tomli not found, attempting to use built-in tomllib")
+    try:
+        import tomllib as tomli
+    except ImportError:
+        logger.error("Neither tomli nor tomllib available. Config parsing may fail.")
+
+        # Define a minimal stub that will prevent crashes when referenced
+        class TomliStub:
+            @staticmethod
+            def load(file):
+                logger.error("No TOML parser available. Using empty config.")
+                return {}
+
+        tomli = TomliStub()
+
+# Import web app, config, and logger with error handling
+try:
+    from app.web_app import app, get_config_value
+
+    logger.info("Successfully imported web app")
+except ImportError as e:
+    logger.error(f"Failed to import app.web_app: {e}")
+    sys.exit(1)
+
+try:
+    from app.config import config
+
+    logger.info("Successfully imported config")
+except ImportError as e:
+    logger.error(f"Failed to import app.config: {e}")
+    logger.warning("Using fallback configuration")
+    config = {
+        "system": {"max_tokens_limit": 8192, "max_concurrent_requests": 2},
+        "web": {"port": 5000, "debug": False},
+    }
+
+# Try to use the logger from app.logger, but fall back to basic logging
+try:
+    from app.logger import setup_logger
+
+    logger = setup_logger("web_dashboard")
+    logger.info("Using configured logger from app.logger")
+except ImportError as e:
+    logger.warning(f"Could not import setup_logger: {e}")
+    logger.info("Using basic logger")
 
 
 def get_config_value(section, key, default_value):
@@ -63,27 +111,19 @@ def main():
     Main entry point for the OpenManus Web UI Dashboard.
     """
     try:
-        # Log startup
-        logger.info("Starting OpenManus Web Dashboard")
+        # Get the port and debug configuration
+        port = get_config_value("web", "port", 5000)
+        debug = get_config_value("web", "debug", False)
 
-        # Get port from config or environment, default to 5000
-        port = int(os.environ.get("PORT", get_config_value("web", "port", 5000)))
+        # Log startup information
+        logger.info(f"Starting OpenManus Web UI Dashboard on port {port}")
+        logger.info(f"Debug mode: {debug}")
 
-        # Get debug mode from config or environment, default to False in production
-        debug = os.environ.get("DEBUG", get_config_value("web", "debug", False))
-
-        # Print access information
-        print(f"OpenManus Web Dashboard is running!")
-        print(f"Access the dashboard at: http://localhost:{port}")
-        print(f"Press Ctrl+C to stop the server.")
-
-        # Run the Flask app
-        logger.info(f"Web UI available at http://localhost:{port}")
-        app.run(debug=debug, host="0.0.0.0", port=port)
-
+        # Start the Flask app
+        app.run(host="0.0.0.0", port=port, debug=debug)
     except Exception as e:
-        logger.error(f"Error starting web dashboard: {e}")
-        raise
+        logger.exception(f"Error starting OpenManus Web UI Dashboard: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
