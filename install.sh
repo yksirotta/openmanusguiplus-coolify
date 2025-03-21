@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenManus GUI Plus Installer
-# Robust installation script with memory management
+# Smart installation with automatic space optimization
 
 set -e  # Exit on error
 
@@ -23,71 +23,34 @@ handle_error() {
     exit 1
 }
 
-# Check disk space
-check_disk_space() {
-    # Get available disk space in KB
+# Get available disk space in MB
+get_available_space() {
+    local available
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
-        AVAILABLE_SPACE=$(df -k . | tail -1 | awk '{print $4}')
+        available=$(df -m . | tail -1 | awk '{print $4}')
     else
         # Linux and others
-        AVAILABLE_SPACE=$(df -k . | tail -1 | awk '{print $4}')
+        available=$(df -m . | tail -1 | awk '{print $4}')
     fi
-
-    # Convert to MB
-    AVAILABLE_SPACE_MB=$((AVAILABLE_SPACE / 1024))
-
-    echo -e "${BLUE}Available disk space: ${AVAILABLE_SPACE_MB} MB${NC}"
-
-    # Check if we have at least 1.5GB free for full install
-    if [ "$AVAILABLE_SPACE_MB" -lt 1500 ]; then
-        echo -e "${YELLOW}Warning: Low disk space detected (${AVAILABLE_SPACE_MB} MB available)${NC}"
-        echo -e "${YELLOW}Recommending lightweight installation mode${NC}"
-        return 1
-    fi
-    return 0
+    echo "$available"
 }
 
-# Check dependencies
-check_dependency() {
-    if ! command -v $1 &> /dev/null; then
-        echo -e "${YELLOW}Warning: $1 is not installed.${NC}"
-        echo -e "Please install $1 using: $2"
-        return 1
-    fi
-    return 0
-}
-
-# Parse arguments
+# Installation directory - default to current directory
 INSTALL_DIR="$PWD/openmanusguiplus"
-LIGHTWEIGHT=false
-
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        -l|--lightweight) LIGHTWEIGHT=true ;;
-        -d|--dir) INSTALL_DIR="$2"; shift ;;
-        *) INSTALL_DIR="$1" ;;
-    esac
-    shift
-done
+if [ -n "$1" ]; then
+    INSTALL_DIR="$1"
+fi
 
 echo -e "Installing to: ${GREEN}$INSTALL_DIR${NC}"
 mkdir -p "$INSTALL_DIR" || handle_error "Failed to create installation directory"
 
-# Check disk space
-if ! check_disk_space; then
-    echo -e "${YELLOW}Auto-selecting lightweight mode due to disk space constraints${NC}"
-    LIGHTWEIGHT=true
-fi
-
-if [ "$LIGHTWEIGHT" = true ]; then
-    echo -e "${BLUE}Installing in lightweight mode (minimal dependencies)${NC}"
-else
-    echo -e "${BLUE}Installing in standard mode (full dependencies)${NC}"
-fi
-
 # Check for git
-check_dependency "git" "apt-get install git" || handle_error "Git is required"
+if ! command -v git &> /dev/null; then
+    echo -e "${RED}Git is not installed.${NC}"
+    echo -e "Please install git using your package manager and try again."
+    exit 1
+fi
 
 # Check for Python
 PY_CMD=""
@@ -101,10 +64,18 @@ fi
 
 echo -e "Using Python command: ${GREEN}$PY_CMD${NC}"
 
-# Clone the repository
-echo -e "${YELLOW}Cloning repository...${NC}"
-git clone https://github.com/mhm22332/openmanusguiplus.git "$INSTALL_DIR" || handle_error "Failed to clone repository"
+# Check disk space
+AVAILABLE_SPACE=$(get_available_space)
+echo -e "${BLUE}Available disk space: ${AVAILABLE_SPACE}MB${NC}"
+
+# Clone the repository (shallow clone to save space)
+echo -e "${YELLOW}Cloning repository (minimal size)...${NC}"
+git clone --depth=1 https://github.com/mhm22332/openmanusguiplus.git "$INSTALL_DIR" || handle_error "Failed to clone repository"
 cd "$INSTALL_DIR" || handle_error "Failed to enter installation directory"
+
+# Clean git objects to save space
+echo -e "${YELLOW}Optimizing repository size...${NC}"
+rm -rf .git/objects/pack/* .git/objects/info/* .git/refs/remotes/ .git/logs/ .git/hooks/ || true
 
 # Create virtual environment with specific Python version
 echo -e "${YELLOW}Creating Python virtual environment...${NC}"
@@ -119,62 +90,45 @@ fi
 echo -e "${YELLOW}Activating virtual environment...${NC}"
 source "$ACTIVATE_SCRIPT" || handle_error "Failed to activate virtual environment"
 
-# Configure pip to use less memory and disk space
+# Configure pip to minimize disk usage
 export PIP_NO_CACHE_DIR=1
 export PIP_NO_COMPILE=1
 export PYTHONUNBUFFERED=1
 
-# Upgrade pip with minimal output
-echo -e "${YELLOW}Upgrading pip...${NC}"
-pip install --no-cache-dir --quiet --upgrade pip || echo -e "${YELLOW}Warning: Failed to upgrade pip, continuing anyway...${NC}"
+# Create requirements files by priority
+echo -e "${YELLOW}Preparing optimized installation plan...${NC}"
 
-# Install critical dependencies
-echo -e "${YELLOW}Installing critical dependencies...${NC}"
-pip install --no-cache-dir --quiet wheel setuptools || echo -e "${YELLOW}Warning: Failed to install wheel/setuptools, continuing anyway...${NC}"
-
-# Install core dependencies based on installation mode
-echo -e "${YELLOW}Installing core dependencies...${NC}"
-if [ "$LIGHTWEIGHT" = true ]; then
-    # Lightweight installation - just the basics
-    pip install --no-cache-dir --quiet flask flask-socketio flask-cors psutil tomli tomli_w ||
-        handle_error "Failed to install core dependencies"
-
-    # Create a requirements-light.txt file for future updates
-    cat > requirements-light.txt << EOL
+# Create tier 1 - absolute minimum dependencies (very small footprint)
+cat > requirements-tier1.txt << EOL
 flask==2.3.3
-flask-socketio==5.3.6
-flask-cors==4.0.0
-psutil==5.9.5
-tomli==2.0.1
-tomli_w==1.0.0
 werkzeug==2.3.7
 EOL
 
-    echo -e "${GREEN}Installed lightweight dependencies!${NC}"
-else
-    # Standard installation with LLM dependencies
-    pip install --no-cache-dir --quiet flask flask-socketio flask-cors psutil tomli tomli_w tiktoken openai ||
-        handle_error "Failed to install core dependencies"
+# Create tier 2 - basic web functionality (small footprint)
+cat > requirements-tier2.txt << EOL
+flask-socketio==5.3.6
+flask-cors==4.0.0
+psutil==5.9.5
+EOL
 
-    echo -e "${YELLOW}Installing AI dependencies...${NC}"
-    # Try to install the AI-related dependencies, but don't fail if they can't be installed
-    pip install --no-cache-dir --quiet tiktoken openai ||
-        echo -e "${YELLOW}Warning: Could not install some AI dependencies. Basic functionality will still work.${NC}"
+# Create tier 3 - configuration and utilities (medium footprint)
+cat > requirements-tier3.txt << EOL
+tomli==2.0.1
+tomli_w==1.0.0
+EOL
 
-    echo -e "${YELLOW}Installing remaining dependencies...${NC}"
-    if [ -f requirements.txt ]; then
-        pip install --no-cache-dir --quiet -r requirements.txt ||
-            echo -e "${YELLOW}Warning: Some dependencies failed to install. Basic functionality should still work.${NC}"
-    fi
-fi
+# Create tier 4 - AI dependencies (large footprint)
+cat > requirements-tier4.txt << EOL
+tiktoken
+openai
+EOL
 
-# Create config directory if needed
+# Create config directory
 mkdir -p config
 
-# Create default config if needed
-if [ ! -f config/config.toml ]; then
-    echo -e "${YELLOW}Creating default configuration...${NC}"
-    cat > config/config.toml << EOL
+# Create smart configuration file that adapts to installed dependencies
+echo -e "${YELLOW}Creating adaptive configuration...${NC}"
+cat > config/config.toml << EOL
 # Global LLM configuration
 [llm]
 model = "gpt-4o"
@@ -192,14 +146,107 @@ debug = false
 
 # Memory management settings
 [system]
-# Lower these values on low-memory systems
 max_tokens_limit = 8192
 max_concurrent_requests = 2
-lightweight_mode = $([ "$LIGHTWEIGHT" = true ] && echo "true" || echo "false")
+# Sets itself automatically based on what's installed
+lightweight_mode = true
 EOL
+
+# Create smart installer script that can resume installation
+echo -e "${YELLOW}Creating smart dependency installer...${NC}"
+cat > install-deps.sh << EOL
+#!/bin/bash
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Activate virtual environment
+ACTIVATE_SCRIPT=".venv/bin/activate"
+if [[ "\$OSTYPE" == "msys" || "\$OSTYPE" == "win32" ]]; then
+    ACTIVATE_SCRIPT=".venv/Scripts/activate"
+fi
+source "\$ACTIVATE_SCRIPT"
+
+# Configure pip
+export PIP_NO_CACHE_DIR=1
+export PIP_NO_COMPILE=1
+
+# Get available space in MB
+get_space() {
+    if [[ "\$OSTYPE" == "darwin"* ]]; then
+        df -m . | tail -1 | awk '{print \$4}'
+    else
+        df -m . | tail -1 | awk '{print \$4}'
+    fi
+}
+
+# Install a tier with space check
+install_tier() {
+    local tier=\$1
+    local needed=\$2
+    local desc=\$3
+
+    echo -e "\${YELLOW}Checking if we can install \${desc} (\${needed}MB needed)...\${NC}"
+    local space=\$(get_space)
+
+    if [ "\$space" -lt "\$needed" ]; then
+        echo -e "\${RED}Not enough space to install \${desc}.\${NC}"
+        echo -e "\${RED}Available: \${space}MB, Needed: \${needed}MB\${NC}"
+        return 1
+    fi
+
+    echo -e "\${GREEN}Installing \${desc}...\${NC}"
+    pip install --no-cache-dir --no-deps -r "requirements-tier\${tier}.txt" && touch ".tier\${tier}-installed"
+    local result=\$?
+
+    if [ \$result -ne 0 ]; then
+        echo -e "\${RED}Failed to install \${desc}.\${NC}"
+        return \$result
+    fi
+
+    echo -e "\${GREEN}Successfully installed \${desc}!\${NC}"
+    return 0
+}
+
+# Always try to install lower tiers if not already installed
+if [ ! -f ".tier1-installed" ]; then
+    install_tier 1 20 "core web server" || exit 1
 fi
 
-# Create a startup script with optimizations
+if [ ! -f ".tier2-installed" ]; then
+    install_tier 2 30 "web functionality" || echo -e "\${YELLOW}Continuing with limited web functionality\${NC}"
+fi
+
+if [ ! -f ".tier3-installed" ]; then
+    install_tier 3 20 "configuration utilities" || echo -e "\${YELLOW}Continuing with limited configuration capabilities\${NC}"
+fi
+
+if [ ! -f ".tier4-installed" ]; then
+    install_tier 4 500 "AI capabilities" || echo -e "\${YELLOW}AI capabilities not installed. Run this script later when you have more disk space.\${NC}"
+fi
+
+# Summarize what's installed
+echo -e "\${BLUE}Installation summary:\${NC}"
+[ -f ".tier1-installed" ] && echo -e "  ✅ Core web server" || echo -e "  ❌ Core web server"
+[ -f ".tier2-installed" ] && echo -e "  ✅ Web functionality" || echo -e "  ❌ Web functionality"
+[ -f ".tier3-installed" ] && echo -e "  ✅ Configuration utilities" || echo -e "  ❌ Configuration utilities"
+[ -f ".tier4-installed" ] && echo -e "  ✅ AI capabilities" || echo -e "  ❌ AI capabilities (run this script later to add them)"
+
+# Update config based on what's installed
+if [ -f ".tier4-installed" ]; then
+    sed -i 's/lightweight_mode = true/lightweight_mode = false/' config/config.toml 2>/dev/null || \
+    sed -i '' 's/lightweight_mode = true/lightweight_mode = false/' config/config.toml
+fi
+
+echo -e "\${GREEN}Done! Run ./start.sh to start the application.\${NC}"
+EOL
+
+chmod +x install-deps.sh
+
+# Create optimized startup script
 echo -e "${YELLOW}Creating optimized startup script...${NC}"
 cat > start.sh << EOL
 #!/bin/bash
@@ -215,63 +262,59 @@ export PIP_NO_CACHE_DIR=1
 # Activate virtual environment
 source "$ACTIVATE_SCRIPT"
 
+# Check if any dependencies are installed before starting
+if [ ! -f ".tier1-installed" ]; then
+    echo "First-time setup: Installing critical dependencies..."
+    ./install-deps.sh
+fi
+
 # Run with memory optimization
 python -X no_debug_ranges run_web_app.py
 EOL
 
 chmod +x start.sh
 
-# Create a dependencies management script
-echo -e "${YELLOW}Creating dependency management script...${NC}"
-cat > manage_deps.sh << EOL
+# Create disk space cleanup utility
+echo -e "${YELLOW}Creating space cleanup utility...${NC}"
+cat > cleanup-space.sh << EOL
 #!/bin/bash
 
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+echo -e "\${YELLOW}Cleaning up to free disk space...\${NC}"
+
 # Activate virtual environment
 source "$ACTIVATE_SCRIPT"
 
-# Show usage
-if [ "\$#" -eq 0 ]; then
-    echo -e "${YELLOW}Usage:${NC}"
-    echo -e "  ${GREEN}./manage_deps.sh install-ai${NC} - Install AI dependencies (tiktoken, openai)"
-    echo -e "  ${GREEN}./manage_deps.sh install-full${NC} - Install all dependencies"
-    echo -e "  ${GREEN}./manage_deps.sh clean-cache${NC} - Clean pip cache to free disk space"
-    echo -e "  ${GREEN}./manage_deps.sh check${NC} - Check installed dependencies"
-    exit 0
-fi
+# Clean pip cache
+pip cache purge
 
-# Set pip options to save space
-export PIP_NO_CACHE_DIR=1
+# Remove __pycache__ directories
+find . -type d -name "__pycache__" -exec rm -rf {} +
 
-case "\$1" in
-    install-ai)
-        echo -e "${YELLOW}Installing AI dependencies...${NC}"
-        pip install --no-cache-dir tiktoken openai
-        ;;
-    install-full)
-        echo -e "${YELLOW}Installing all dependencies...${NC}"
-        pip install --no-cache-dir -r requirements.txt
-        ;;
-    clean-cache)
-        echo -e "${YELLOW}Cleaning pip cache...${NC}"
-        pip cache purge
-        ;;
-    check)
-        echo -e "${YELLOW}Checking dependencies...${NC}"
-        pip list
-        ;;
-    *)
-        echo -e "${RED}Unknown command: \$1${NC}"
-        echo -e "${YELLOW}Try ./manage_deps.sh without arguments for usage help${NC}"
-        ;;
-esac
+# Clean temporary files
+rm -rf /tmp/pip-* 2>/dev/null
+rm -rf /tmp/pip_build_* 2>/dev/null
+rm -rf .pytest_cache 2>/dev/null
+
+# Remove compiled Python files
+find . -name "*.pyc" -delete
+find . -name "*.pyo" -delete
+find . -name "*.pyd" -delete
+
+# Clean downloads
+rm -rf downloads/* 2>/dev/null
+
+echo -e "\${GREEN}Cleanup complete!\${NC}"
 EOL
 
-chmod +x manage_deps.sh
+chmod +x cleanup-space.sh
+
+# Now run the dependency installer
+echo -e "${YELLOW}Starting smart dependency installation...${NC}"
+./install-deps.sh
 
 # Print success message
 echo -e "${GREEN}==============================================${NC}"
@@ -279,10 +322,11 @@ echo -e "${GREEN}     Installation Completed Successfully!     ${NC}"
 echo -e "${GREEN}==============================================${NC}"
 echo -e "To run OpenManus GUI Plus:"
 echo -e "  1. Navigate to: ${YELLOW}$INSTALL_DIR${NC}"
-echo -e "  2. Run the optimized startup script: ${YELLOW}./start.sh${NC}"
+echo -e "  2. Run: ${YELLOW}./start.sh${NC}"
 echo -e ""
-if [ "$LIGHTWEIGHT" = true ]; then
-    echo -e "${YELLOW}Note: You installed in lightweight mode without AI dependencies.${NC}"
-    echo -e "To add AI capabilities later: ${YELLOW}./manage_deps.sh install-ai${NC}"
-fi
+echo -e "If you need to add AI capabilities later:"
+echo -e "  Run: ${YELLOW}./install-deps.sh${NC}"
+echo -e ""
+echo -e "To free up disk space:"
+echo -e "  Run: ${YELLOW}./cleanup-space.sh${NC}"
 echo -e "${GREEN}==============================================${NC}"
