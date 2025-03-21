@@ -22,8 +22,30 @@ def define_log_level(print_level="INFO", logfile_level="DEBUG", name: str = None
 
     _logger.remove()
     _logger.add(sys.stderr, level=print_level)
+
+    # Ensure the logs directory exists
+    log_dir = PROJECT_ROOT / "logs"
+    log_dir.mkdir(exist_ok=True)
+
     _logger.add(PROJECT_ROOT / f"logs/{log_name}.log", level=logfile_level)
     return _logger
+
+
+def setup_logger(name=None, print_level="INFO", logfile_level="DEBUG"):
+    """
+    Set up and configure the logger for the application.
+
+    Args:
+        name (str, optional): Name prefix for the log file. Defaults to None.
+        print_level (str, optional): Log level for console output. Defaults to "INFO".
+        logfile_level (str, optional): Log level for file output. Defaults to "DEBUG".
+
+    Returns:
+        Logger: Configured logger instance
+    """
+    return define_log_level(
+        print_level=print_level, logfile_level=logfile_level, name=name
+    )
 
 
 logger = define_log_level()
