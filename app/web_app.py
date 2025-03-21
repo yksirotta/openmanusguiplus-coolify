@@ -36,9 +36,50 @@ except ImportError:
     }
 
 # Configure memory management
-memory_limit = int(config.get("system", {}).get("max_tokens_limit", 8192))
-max_concurrent = int(config.get("system", {}).get("max_concurrent_requests", 2))
-lightweight_mode = config.get("system", {}).get("lightweight_mode", False)
+try:
+    # If config is a dictionary (fallback config)
+    if isinstance(config, dict):
+        memory_limit = int(config.get("system", {}).get("max_tokens_limit", 8192))
+        max_concurrent = int(config.get("system", {}).get("max_concurrent_requests", 2))
+        lightweight_mode = config.get("system", {}).get("lightweight_mode", False)
+    else:
+        # For the Config class from config.py, read values from raw config
+        # Attempt to access the raw config via _load_config method
+        raw_config = getattr(config, "_config", None)
+        if raw_config:
+            # Try to get system settings from AppConfig
+            system_config = getattr(raw_config, "system", {})
+            memory_limit = 8192  # Default value
+            max_concurrent = 2  # Default value
+            lightweight_mode = False  # Default value
+
+            # Check if the loaded_config file exists and read from it directly
+            try:
+                config_path = config._get_config_path()
+                import tomli
+
+                with open(config_path, "rb") as f:
+                    toml_config = tomli.load(f)
+                    system_config = toml_config.get("system", {})
+                    memory_limit = int(system_config.get("max_tokens_limit", 8192))
+                    max_concurrent = int(
+                        system_config.get("max_concurrent_requests", 2)
+                    )
+                    lightweight_mode = system_config.get("lightweight_mode", False)
+            except Exception as e:
+                print(f"Error loading system config: {e}")
+        else:
+            # Fallback to defaults
+            memory_limit = 8192
+            max_concurrent = 2
+            lightweight_mode = False
+except Exception as e:
+    # Log the error and use defaults if anything goes wrong
+    print(f"Error configuring memory management: {e}")
+    memory_limit = 8192
+    max_concurrent = 2
+    lightweight_mode = False
+
 last_gc_time = time.time()
 active_requests = 0
 
