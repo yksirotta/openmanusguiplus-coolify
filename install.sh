@@ -1,6 +1,6 @@
 #!/bin/bash
 # OpenManus GUI Plus Installer - Smart Edition
-# Optimized for minimal space requirements with dynamic cache management
+# Optimized for minimal space requirements with direct file management
 
 set -e  # Exit on error
 
@@ -122,24 +122,15 @@ tomli_w==1.0.0
 # openai
 EOL
 
-# Configure pip to minimize space usage
+# Set environment variables for pip
 echo -e "${YELLOW}Configuring pip for minimal space usage...${NC}"
-mkdir -p ~/.config/pip
-cat > ~/.config/pip/pip.conf << EOL
-[global]
-no-cache-dir = true
-no-compile = true
-disable-pip-version-check = true
-EOL
-
-# Set environment variables for this session
 export PIP_NO_CACHE_DIR=1
 export PIP_NO_COMPILE=1
 export PYTHONUNBUFFERED=1
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Create cache manager script
-echo -e "${YELLOW}Creating cache manager script...${NC}"
+echo -e "${YELLOW}Creating file manager script...${NC}"
 cat > cache-manager.sh << EOL
 #!/bin/bash
 
@@ -150,7 +141,11 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Activate virtual environment
-source "$ACTIVATE_SCRIPT"
+ACTIVATE_SCRIPT=".venv/bin/activate"
+if [[ "\$OSTYPE" == "msys" || "\$OSTYPE" == "win32" ]]; then
+    ACTIVATE_SCRIPT=".venv/Scripts/activate"
+fi
+source "\$ACTIVATE_SCRIPT"
 
 # Set pip to minimize space
 export PIP_NO_CACHE_DIR=1
@@ -168,29 +163,32 @@ get_space() {
 
 # Clean all caches and temporary files
 clean_all() {
-    echo -e "\${YELLOW}Cleaning all caches and temporary files...\${NC}"
-
-    # Try to clean pip cache only if caching is enabled
-    if [ "\$PIP_NO_CACHE_DIR" != "1" ]; then
-        echo -e "\${YELLOW}Attempting to clean pip cache...${NC}"
-        pip cache purge 2>/dev/null || echo -e "\${YELLOW}Pip cache already disabled (good for space saving)${NC}"
-    fi
+    echo -e "\${YELLOW}Cleaning all temporary files...\${NC}"
 
     # Clean Python bytecode files
-    echo -e "\${YELLOW}Cleaning Python bytecode files...${NC}"
+    echo -e "\${YELLOW}Cleaning Python bytecode files...\${NC}"
     find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-    find . -name "*.pyc" -delete
-    find . -name "*.pyo" -delete
-    find . -name "*.pyd" -delete
+    find . -name "*.pyc" -delete 2>/dev/null || true
+    find . -name "*.pyo" -delete 2>/dev/null || true
+    find . -name "*.pyd" -delete 2>/dev/null || true
 
     # Clean temporary files
-    echo -e "\${YELLOW}Cleaning temporary files...${NC}"
-    rm -rf /tmp/pip-* 2>/dev/null || true
-    rm -rf /tmp/pip_build_* 2>/dev/null || true
-    rm -rf .pytest_cache 2>/dev/null || true
+    echo -e "\${YELLOW}Cleaning temporary files...\${NC}"
+    rm -rf tmp/ 2>/dev/null || true
+    rm -rf .pytest_cache/ 2>/dev/null || true
+    rm -rf .mypy_cache/ 2>/dev/null || true
+
+    # Clean any pip temp folders that might exist
+    rm -rf "\$HOME/.cache/pip" 2>/dev/null || true
+
+    # Clean temporary directories in current folder
+    find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+    find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
     # Clean downloads directory
     rm -rf downloads/* 2>/dev/null || true
+    rm -rf .downloads/ 2>/dev/null || true
 
     echo -e "\${GREEN}Cleanup complete!\${NC}"
 }
@@ -208,6 +206,12 @@ install_ai() {
     fi
 
     echo -e "\${GREEN}Installing AI dependencies...\${NC}"
+
+    # Ensure pip settings are properly set
+    export PIP_NO_CACHE_DIR=1
+    export PIP_NO_COMPILE=1
+
+    # Install directly without using pip cache
     pip install --no-cache-dir openai tiktoken
 
     # Update config
@@ -228,6 +232,10 @@ show_info() {
 
     echo -e "\${BLUE}Python version:\${NC}"
     python --version
+
+    echo -e "\${BLUE}Environment Settings:\${NC}"
+    echo -e "  PIP_NO_CACHE_DIR=\$PIP_NO_CACHE_DIR"
+    echo -e "  PIP_NO_COMPILE=\$PIP_NO_COMPILE"
 }
 
 # Display help
@@ -236,7 +244,7 @@ show_help() {
     echo -e "Usage: ./cache-manager.sh [command]"
     echo -e ""
     echo -e "Commands:"
-    echo -e "  clean       Clean all caches and temporary files"
+    echo -e "  clean       Clean all temporary files"
     echo -e "  ai          Install AI dependencies (if space available)"
     echo -e "  info        Show system information and installed packages"
     echo -e "  help        Show this help message"
@@ -323,15 +331,20 @@ EOL
 
 chmod +x start.sh
 
-# Install minimal dependencies first
-echo -e "${YELLOW}Installing minimal dependencies...${NC}"
-# No need to clean cache since it's already disabled
-
 # Set temp directory to the installation directory to avoid filling /tmp
 export TMPDIR="$INSTALL_DIR/tmp"
 mkdir -p "$TMPDIR"
 
-# Do a minimal install first
+# Clean temporary files
+echo -e "${YELLOW}Cleaning temporary files before installation...${NC}"
+# Clean Python bytecode files
+find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+find . -name "*.pyc" -delete 2>/dev/null || true
+find . -name "*.pyo" -delete 2>/dev/null || true
+find . -name "*.pyd" -delete 2>/dev/null || true
+
+# Install minimal dependencies first
+echo -e "${YELLOW}Installing minimal dependencies...${NC}"
 pip install --no-cache-dir Flask==2.3.3 markupsafe==2.1.3 Werkzeug==2.3.7 Jinja2==3.1.2 click==8.1.7 itsdangerous==2.1.2
 
 # Check disk space again
@@ -358,13 +371,9 @@ fi
 # Clean temp directory to save space
 rm -rf "$TMPDIR"
 
-# Clean temporary files
-echo -e "${YELLOW}Cleaning up temporary files...${NC}"
-# Clean Python bytecode files
-find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-find . -name "*.pyc" -delete
-find . -name "*.pyo" -delete
-find . -name "*.pyd" -delete
+# Run our file cleanup script
+echo -e "${YELLOW}Running final cleanup...${NC}"
+./cache-manager.sh clean
 
 # Print success message
 echo -e "${GREEN}==============================================${NC}"
@@ -374,7 +383,7 @@ echo -e "To run OpenManus GUI Plus:"
 echo -e "  1. Navigate to: ${YELLOW}$INSTALL_DIR${NC}"
 echo -e "  2. Run: ${YELLOW}./start.sh${NC}"
 echo -e ""
-echo -e "To manage caches and dependencies:"
+echo -e "To manage files and dependencies:"
 echo -e "  Run: ${YELLOW}./cache-manager.sh help${NC}"
 echo -e ""
 echo -e "To install AI capabilities if you have enough space (500MB+):"
