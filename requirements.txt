@@ -46,7 +46,7 @@ werkzeug==2.3.7
 markupsafe==2.1.3
 jinja2==3.1.2
 itsdangerous==2.1.2
-click==8.1.7
+click==8.1.8
 
 # Web functionality
 # flask-socketio and flask-cors are already listed above
