@@ -62,7 +62,7 @@ tomli_w==1.0.0
 pydantic==2.5.2
 
 # Logging
-loguru==0.7.2
+loguru==0.7.3
 
 # AI capabilities (optional)
 # Comment these out if space is limited
